@@ -3,7 +3,7 @@
 **팀 규칙 세우기 / Setting team rules**
 
 - 작성일 / Date: 2026년 09월 02일
-- 참여자 / Present: 강동혁, 박제헌, 오형석
+- 참여자 / Present: 강동혁, 강재환, 박제헌, 오형석
 - 최종 반영 / Feeds into: docs/team-rules.md
 
 ---

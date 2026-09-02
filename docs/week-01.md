@@ -2,30 +2,34 @@
 
 **팀 규칙 세우기 / Setting team rules**
 
-- 작성일 / Date: 
-- 참여자 / Present: 
+- 작성일 / Date: 2026년 09월 02일
+- 참여자 / Present: 강동혁, 박제헌, 오형석
 - 최종 반영 / Feeds into: docs/team-rules.md
 
 ---
 
 ## 팀명·팀원·학부 / Team, members, department
 
-
+강동혁 ICT융합학부 데이터인텔리전스
+박제헌 ICT융합학부 데이터인텔리전스
+오형석 ICT융합학부 데이터인텔리전스
 
 ## 연락 규칙 / Contact rule — 어디로, 몇 시간 내 응답
 
+카카오톡 디스코드
+응답: 3시간 이내
 
 
 ## 회의 규칙 / Meeting rule — 요일·시간·불참 처리
 
-
+수요일에 정한다.
 
 ## 기여 규칙 / Contribution rule — 1인당 주 최소 작업량
 
 
 
 ## 갈등 처리 / Conflict rule — 의견이 갈릴 때
-
+의견을 종합하여 각각의 트레이드오프를 고려하여 의견이 갈린 이유를 분석하고, 조율하여 문제를 해결한다.
 
 
 ## 마감 규칙 / Deadline rule
@@ -33,7 +37,7 @@
 
 
 ## **팀 공용 언어 / Working language** — 회의 언어 / 기록 언어
-
+한국어(Main), 영어(Sub)
 
 
 ## AI 사용에 대한 팀 합의 / Team agreement on AI use

@@ -107,8 +107,6 @@
 - 처음 다루게 될 영역과 협업 형태의 개발
 - 코드를 리뷰하는 과정이 순탄할 것인가?
 - 각자가 맡은 Issue와 Task를 실패했을 때, 해결방안과 방지 대책은?
-- 
----
 
 > 수업 종료 시 커밋하세요 / Commit this at the end of class
 > `git add docs/week-01.md && git commit -m "docs: 1주차 활동지 작성"`

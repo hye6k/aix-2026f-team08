@@ -1,0 +1,23 @@
+memo-seed 실습 재료 — 설치 방법
+
+1. 이 압축 파일을 풉니다.
+2. memo-seed 폴더를 통째로 여러분 팀 저장소 안에 복사합니다.
+3. 커밋하고 푸시합니다.
+
+   git add memo-seed
+   git commit -m "add memo-seed for week 2"
+   git push
+
+폴더 구조가 아래처럼 되면 됩니다.
+
+   여러분의-저장소/
+   ├── docs/
+   └── memo-seed/
+       ├── README.md
+       ├── schema.sql
+       ├── service.js
+       ├── routes.js
+       └── CONVENTIONS.md
+
+실행 환경을 구성하지 않아도 됩니다.
+코드를 읽고 판단하는 것이 이번 실습의 과제입니다.

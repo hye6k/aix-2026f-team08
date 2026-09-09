@@ -43,6 +43,155 @@
 결과 개수 표시 — 검색 결과의 개수를 보여줍니다
 샘플 메모 4개가 이미 등록되어 있으니 검색해보세요. 예를 들어 "프로젝트", "코드", "팀" 등으로 검색하면 관련 메모들이 필터링됩니다.
 ```
+
+```
+<div style="padding: 1.5rem 0;">
+  <div style="margin-bottom: 2rem;">
+    <h2 style="font-size: 18px; font-weight: 500; margin: 0 0 1rem 0; color: var(--text-primary);">메모</h2>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 1.5rem;">
+      <input 
+        type="text" 
+        id="searchInput" 
+        placeholder="제목이나 본문에서 검색..."
+        style="flex: 1; padding: 10px 12px; border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface-2);"
+      />
+      <button 
+        onclick="addMemo()"
+        style="padding: 10px 16px; background: var(--fill-accent); color: var(--on-accent); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer;"
+      >
+        + 추가
+      </button>
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap;">
+      <span style="font-size: 13px; color: var(--text-secondary);">전체</span>
+      <span id="resultCount" style="font-size: 13px; color: var(--text-secondary); font-weight: 500;"></span>
+    </div>
+  </div>
+
+  <div id="memoList" style="display: flex; flex-direction: column; gap: 12px;"></div>
+
+  <!-- 숨겨진 추가 폼 -->
+  <div id="addForm" style="display: none; background: var(--surface-1); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-top: 1.5rem;">
+    <h3 style="font-size: 16px; font-weight: 500; margin: 0 0 1rem 0; color: var(--text-primary);">새 메모</h3>
+    <input 
+      type="text" 
+      id="newTitle" 
+      placeholder="제목"
+      style="width: 100%; padding: 10px 12px; border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 14px; margin-bottom: 10px; box-sizing: border-box;"
+    />
+    <textarea 
+      id="newContent" 
+      placeholder="본문"
+      style="width: 100%; padding: 10px 12px; border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 14px; margin-bottom: 10px; resize: vertical; min-height: 80px; box-sizing: border-box;"
+    ></textarea>
+    <div style="display: flex; gap: 8px;">
+      <button 
+        onclick="saveMemo()"
+        style="flex: 1; padding: 10px 12px; background: var(--fill-accent); color: var(--on-accent); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer;"
+      >
+        저장
+      </button>
+      <button 
+        onclick="cancelAdd()"
+        style="flex: 1; padding: 10px 12px; background: var(--surface-2); color: var(--text-primary); border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer;"
+      >
+        취소
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let memos = [
+  { id: 1, title: '프로젝트 계획', content: '새로운 모바일 앱 프로젝트 시작. UI/UX 디자인부터 진행. 팀미팅은 월요일 10시.' },
+  { id: 2, title: '코드 리뷰 체크리스트', content: '함수 이름 명확성 확인\n변수 네이밍 규칙 준수\n에러 핸들링 처리\n주석 작성 여부' },
+  { id: 3, title: '회의 메모', content: '분기별 목표 설정\n팀 구성원 역할 배분\n예산 검토 및 승인' },
+  { id: 4, title: '학습 목표', content: 'React 고급 패턴 학습\nTypeScript 타입 시스템 깊이 있게 이해\n성능 최적화 기법 습득' }
+];
+
+let nextId = 5;
+const searchInput = document.getElementById('searchInput');
+const memoList = document.getElementById('memoList');
+const resultCount = document.getElementById('resultCount');
+const addForm = document.getElementById('addForm');
+
+searchInput.addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase().trim();
+  filterAndDisplay(query);
+});
+
+function filterAndDisplay(query) {
+  const filtered = query === '' 
+    ? memos 
+    : memos.filter(memo => 
+        memo.title.toLowerCase().includes(query) || 
+        memo.content.toLowerCase().includes(query)
+      );
+
+  resultCount.textContent = `${filtered.length}개`;
+  
+  memoList.innerHTML = filtered.map(memo => `
+    <div style="background: var(--surface-1); border: 0.5px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+        <h3 style="font-size: 15px; font-weight: 500; margin: 0; color: var(--text-primary);">${escapeHtml(memo.title)}</h3>
+        <button 
+          onclick="deleteMemo(${memo.id})"
+          style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; font-size: 16px;"
+          title="삭제"
+        >
+          <i class="ti ti-trash" style="font-size: 16px;"></i>
+        </button>
+      </div>
+      <p style="font-size: 14px; color: var(--text-secondary); margin: 0; white-space: pre-wrap; line-height: 1.5;">${escapeHtml(memo.content)}</p>
+    </div>
+  `).join('');
+
+  if (filtered.length === 0 && query !== '') {
+    memoList.innerHTML = `<div style="text-align: center; padding: 2rem 1rem; color: var(--text-secondary); font-size: 14px;">"${escapeHtml(query)}"에 맞는 메모가 없습니다</div>`;
+  }
+}
+
+function addMemo() {
+  addForm.style.display = 'block';
+  document.getElementById('newTitle').focus();
+}
+
+function cancelAdd() {
+  addForm.style.display = 'none';
+  document.getElementById('newTitle').value = '';
+  document.getElementById('newContent').value = '';
+}
+
+function saveMemo() {
+  const title = document.getElementById('newTitle').value.trim();
+  const content = document.getElementById('newContent').value.trim();
+  
+  if (!title || !content) {
+    alert('제목과 본문을 입력해주세요');
+    return;
+  }
+  
+  memos.push({ id: nextId++, title, content });
+  cancelAdd();
+  filterAndDisplay(searchInput.value.toLowerCase().trim());
+}
+
+function deleteMemo(id) {
+  memos = memos.filter(m => m.id !== id);
+  filterAndDisplay(searchInput.value.toLowerCase().trim());
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+filterAndDisplay('');
+</script>
+```
 문제점
 
 ## 방식 B — 4단계 분해 / spec → context → unit → verify

@@ -202,7 +202,7 @@ filterAndDisplay('');
 | :-: | :-- | :-- |
 | ① | 실행 성공까지 걸린 시간 | 측정불가 |
 | ② | 없는 함수·컬럼을 지어낸 개수 | 함수: 6개 / 컬럼 사용안함 |
-| | → 지어낸 이름 (filterAndDisplay, addMemo, cancelAdd, saveMemo, deleteMemo, escapeHtml) | |
+| | → 지어낸 이름 | filterAndDisplay, addMemo, cancelAdd, saveMemo, deleteMemo, escapeHtml |
 | ③ | `CONVENTIONS.md` 위반 개수 | 제시 안함 |
 | | → 무엇을 어겼는가 | |
 | ④ | 사람이 직접 고친 지점 | 0곳 |

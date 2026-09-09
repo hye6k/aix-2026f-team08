@@ -11,10 +11,12 @@
 
 ## 구현할 작은 기능 / Small feature
 
+> 메모 검색 기능을 추가하라. 제목과 본문에서 키워드로 찾을 수 있어야 한다.
 
 
 ## 사용한 도구 / Tool used
 
+Claude Haiku 4.5
 
 
 ## 방식 A — 통째로 요청 / One big request

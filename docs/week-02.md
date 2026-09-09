@@ -2,8 +2,8 @@
 
 **AI 협업 방식 비교 / Comparing two ways of working with AI**
 
-- 작성일 / Date: 
-- 참여자 / Present: 
+- 작성일 / Date: 2026년 9월 9일
+- 참여자 / Present: 강동혁, 강재환, 박제헌, 오형석
 - 결과보고서 / Report chapter: 6장 AI 활용과 판단
 - 최종 반영 / Feeds into: PROMPTS.md 첫 항목
 

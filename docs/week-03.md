@@ -3,7 +3,7 @@
 **도메인 문제 발굴 / Domain problem discovery**
 
 - 작성일 / Date: 2026년 9월 16일
-- 참여자 / Present: 강동혁, 오형석
+- 참여자 / Present: 강동혁, 박제헌, 오형석
 
 ---
 

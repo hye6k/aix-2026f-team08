@@ -1,1 +1,12 @@
 .DS_Store
+._*
+
+# Machine configuration and credentials shared by all contributors.
+.idea/
+*.iml
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+key.properties

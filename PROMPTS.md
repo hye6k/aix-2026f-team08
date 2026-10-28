@@ -56,3 +56,31 @@ Principle: record your **reasoning**, not just prompts.
 
 ---
 (이슈 단위로 반복 / repeat per issue)
+
+## [T01 / 초기 개발 환경] Android Flutter 앱 구성 (2026-10-28)
+
+**목표 / Spec**
+- 5~7주차의 Android 우선·로컬 저장·계층 분리 방향을 실행 가능한 Flutter 초기 앱과 공통 개발 환경에 반영한다.
+- 기기 실행과 플랫폼 실험 없이 T01/T02를 완료 처리하지 않는다.
+
+**요청 원문 (개발 관련 발췌)**
+> 일단 안드로이드 대상 플러터 앱을 만들건데
+>
+> 기본적으로 필요한 요소를 문서를 검토하고 세팅을 해줘.
+>
+> 커밋 로그는 스스로 중요할때마다 남겨줘.
+
+**결과에 대한 판단 / Decisions**
+- 채택: Flutter 3.47.8/Dart 3.13.7, JDK 21과 생성된 Android 빌드 구성을 사용한다. SDK 버전 파일과 앱 lockfile을 공유해 환경 차이를 줄인다.
+- 채택: 화면·순수 Dart 로직·데이터·Android 어댑터의 경계를 구분한다. 초기 탭은 `setState`, 화면 모델은 기본 `ChangeNotifier`/`ListenableBuilder`, 저장은 SQLite(`sqflite`)를 선택했다. 소규모 MVP에서 명시적인 상태·트랜잭션을 다루면서 코드 생성과 의존성을 줄이기 위한 판단이다. DB 스키마·영속성은 T03 후속 작업이다.
+- 수정: Flutter 카운터 예제를 한국어 계획·루틴·기록 초기 화면으로 바꾸고 한국어 로케일과 시스템 테마를 적용했다. 초기 화면과 기능 완성을 구분하여 표시한다.
+- 보류: 알람·활동 신호 플러그인과 권한은 T02 실기기 검증 후 선택한다. 라이브러리 설치만으로 백그라운드·종료 상태 동작을 보장할 수 없기 때문이다.
+- 폐기: `memo-seed/`를 앱 서버로 사용하는 구성, 로그인/동기화, iOS 타깃. 수업 예제와 실제 앱을 혼동하지 않고 확정 범위를 지킨다.
+- 기록: 팀에 필요한 판단은 이 문서에, 개인 작업 메모와 머신 경로는 Git이 추적하지 않는 로컬 기록에 둔다.
+
+**검증 방법 / How it was verified**
+- 의존성 설치, Dart 포맷, `flutter analyze` 통과.
+- 한국어 시작·탭 이동 및 작은 화면/큰 글자 위젯 테스트 2건 통과.
+- `flutter doctor -v`의 Android toolchain 통과. 실제 Android 기기는 연결되지 않았다.
+- APK 빌드 결과와 플랫폼 미검증 항목은 `docs/android-validation.md`에 기록한다.
+- 공통 검사 스크립트 및 GitHub Actions 구성은 `docs/development.md`에 설명한다. 원격 CI 실행 여부는 로컬 검사와 구분한다.

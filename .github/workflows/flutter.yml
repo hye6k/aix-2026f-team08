@@ -32,6 +32,9 @@ jobs:
           flutter_version="$(cat .flutter-version)"
           git clone --depth 1 --branch "$flutter_version" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           git -C "$RUNNER_TEMP/flutter" switch -c stable
+          git -C "$RUNNER_TEMP/flutter" config remote.origin.fetch '+refs/heads/stable:refs/remotes/origin/stable'
+          git -C "$RUNNER_TEMP/flutter" fetch --depth 1 origin stable:refs/remotes/origin/stable
+          git -C "$RUNNER_TEMP/flutter" branch --set-upstream-to=origin/stable stable
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --disable-analytics
       - name: Format, analyze and test

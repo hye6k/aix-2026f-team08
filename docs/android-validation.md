@@ -9,7 +9,7 @@
 - 한국어 앱 시작·탭 이동과 작은 화면·글자 배율 2배 위젯 테스트 2건 통과.
 - `bash scripts/check.sh` 통과: lockfile 고정 설치·포맷·정적 분석·위젯 테스트.
 - `flutter build apk --debug` 통과. `app/build/app/outputs/flutter-apk/app-debug.apk` 생성.
-- GitHub Actions 구성은 작성했으나 원격 실행 전이다.
+- [초안 PR #5](https://github.com/hye6k/aix-2026f-team08/pull/5) 생성으로 GitHub Actions 실행이 시작되었다. 로컬 검사 통과와 원격 CI 결과를 구분하며, 최신 결과는 PR에서 확인한다.
 - 실제 기기에서의 초기 화면 실행은 미검증. T01의 기기 선택·실행 완료 조건은 아직 충족하지 않았다.
 
 ## 테스트 기기

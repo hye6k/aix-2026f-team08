@@ -101,7 +101,10 @@ app/lib/
 ## 협업 기록
 
 브랜치·커밋·리뷰 규칙은 [6주차](week-06.md)를 따른다.
-초기 설정 시 실제 GitHub 이슈 번호가 없어 `chore/android-bootstrap`을 사용했다. 이후 이슈 등록 후 번호를 연결한다.
+초기 설정 시 사용한 `chore/android-bootstrap`은 실제 이슈 번호가 없어 브랜치·이슈 연결 규칙을 충족하지 못했다.
+2026-10-28에 [T01 이슈 #4](https://github.com/hye6k/aix-2026f-team08/issues/4)를 등록하고 최신 main에서 `chore/4-android-bootstrap`을 만들어 같은 변경을 이슈 번호가 포함된 커밋으로 옮겼다.
+[초안 PR #5](https://github.com/hye6k/aix-2026f-team08/pull/5)에서 리뷰한다. 실기기 실행 완료 전에는 T01을 닫지 않는다.
+GitHub 이슈·코멘트·PR 제목/본문·리뷰는 한국어로 작성한다. 브랜치의 작업명은 영문 소문자와 하이픈을 사용한다.
 설명 가능한 작업 단위마다 한국어 Conventional Commit을 남긴다.
 설계 판단·채택/수정/폐기 이유·검증 결과는 기존 `PROMPTS.md`에 기록하며, 개인 메모와 머신 경로는 공유 문서에서 제외한다.
 구현·검증 없이 활동지의 완료 체크나 인터뷰·실기기 검증 결과를 채우지 않는다.

@@ -57,7 +57,7 @@ Principle: record your **reasoning**, not just prompts.
 ---
 (이슈 단위로 반복 / repeat per issue)
 
-## [T01 / 초기 개발 환경] Android Flutter 앱 구성 (2026-10-28)
+## [T01 / 이슈 #4] Android Flutter 앱 구성 (2026-10-28)
 
 **목표 / Spec**
 - 5~7주차의 Android 우선·로컬 저장·계층 분리 방향을 실행 가능한 Flutter 초기 앱과 공통 개발 환경에 반영한다.
@@ -84,3 +84,20 @@ Principle: record your **reasoning**, not just prompts.
 - `flutter doctor -v`의 Android toolchain 통과. 실제 Android 기기는 연결되지 않았다.
 - `bash scripts/check.sh`와 Android 디버그 APK 빌드 통과. 플랫폼 미검증 항목은 `docs/android-validation.md`에 기록한다.
 - 공통 검사 스크립트 및 GitHub Actions 구성은 `docs/development.md`에 설명한다. 원격 CI 실행 여부는 로컬 검사와 구분한다.
+
+## [이슈 #4 / PR #5] 협업 규칙 점검과 원격 게시 (2026-10-28)
+
+**요청 원문**
+> 그럼 week 06인가 week 07 docs에 남겨둔 커밋과 푸시 규칙을 지키고 있는지 검토해보고, 원격에 푸시해줄래?
+>
+> 참고로 이슈와 코멘트, pr 리뷰 등은 그냥 한국어로 할거야
+
+**판단과 반영**
+- 기존 커밋 제목은 6주차 형식을 지켰지만 브랜치의 실제 이슈 번호와 7주차 이슈 연결이 빠져 있었다. T01을 실제 이슈 #4로 등록하고 최신 main에서 규칙에 맞는 브랜치와 이슈 번호가 포함된 커밋으로 같은 변경을 옮겼다.
+- 기존 원격 이력을 강제 변경하지 않고 작업 브랜치를 게시하여 한국어 초안 PR #5로 리뷰 경로를 마련했다. 이슈·코멘트·PR·리뷰의 한국어 작성 원칙을 6주차 문서와 개발 안내에 반영했다.
+- 실기기 검증이 남아 있어 이슈를 자동 종료하는 PR 연결은 사용하지 않았다. main의 보호 규칙은 확인했으며, 필수 승인 수 0명과 실제 리뷰 대기를 구분해 기록했다.
+
+**검증**
+- 원격 main과의 기반 관계, 각 커밋의 형식·이슈 번호, 기존 세 커밋과 옮긴 변경의 파일 내용 일치를 확인했다.
+- `bash scripts/check.sh` 재실행 통과. 앱 소스 변경은 없다.
+- 개인 문서·로컬 SDK·자격 증명과 빌드 산출물의 Git 추적 제외를 재확인했다. PR 병합과 T01 완료는 후속 절차다.

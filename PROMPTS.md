@@ -82,5 +82,5 @@ Principle: record your **reasoning**, not just prompts.
 - 의존성 설치, Dart 포맷, `flutter analyze` 통과.
 - 한국어 시작·탭 이동 및 작은 화면/큰 글자 위젯 테스트 2건 통과.
 - `flutter doctor -v`의 Android toolchain 통과. 실제 Android 기기는 연결되지 않았다.
-- APK 빌드 결과와 플랫폼 미검증 항목은 `docs/android-validation.md`에 기록한다.
+- `bash scripts/check.sh`와 Android 디버그 APK 빌드 통과. 플랫폼 미검증 항목은 `docs/android-validation.md`에 기록한다.
 - 공통 검사 스크립트 및 GitHub Actions 구성은 `docs/development.md`에 설명한다. 원격 CI 실행 여부는 로컬 검사와 구분한다.

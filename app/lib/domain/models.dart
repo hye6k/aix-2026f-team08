@@ -131,6 +131,9 @@ class WakeRecord {
     this.wakeAt,
   }) {
     requireText(id, 'id');
+    if (source == WakeSource.manual && status != WakeStatus.confirmed) {
+      throw ArgumentError('수동 기상 입력은 사용자 확인이 포함된 기록이어야 합니다.');
+    }
     if (decidedAt != null && decidedAt!.isBefore(observedAt)) {
       throw ArgumentError('판단 시각은 감지 시각보다 빠를 수 없습니다.');
     }
@@ -230,6 +233,31 @@ class RoutineRun {
               s.status != StepStatus.skipped,
         )) {
       throw ArgumentError('완료 실행에 미처리 단계가 있습니다.');
+    }
+    if (wakeRecordId != null) requireText(wakeRecordId!, 'wakeRecordId');
+    if (endedAt != null && !endedAt!.isAtSameMomentAs(updatedAt)) {
+      throw ArgumentError('종료 시각과 최종 갱신 시각이 일치하지 않습니다.');
+    }
+    var previousEnd = startedAt;
+    var unfinished = false;
+    for (final execution in steps) {
+      if (unfinished && execution.status != StepStatus.pending) {
+        throw ArgumentError('처리되지 않은 단계 뒤에 실행된 단계가 있습니다.');
+      }
+      if (execution.startedAt != null &&
+          (execution.startedAt!.isBefore(previousEnd) ||
+              execution.startedAt!.isAfter(updatedAt))) {
+        throw ArgumentError('단계 시작 시각이 실행 순서와 일치하지 않습니다.');
+      }
+      if (execution.endedAt != null && execution.endedAt!.isAfter(updatedAt)) {
+        throw ArgumentError('최종 갱신 이후에 끝난 단계가 있습니다.');
+      }
+      if (execution.status == StepStatus.completed ||
+          execution.status == StepStatus.skipped) {
+        previousEnd = execution.endedAt!;
+      } else {
+        unfinished = true;
+      }
     }
   }
   final String id;

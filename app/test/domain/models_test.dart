@@ -2,6 +2,61 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:morning_routine/domain/models.dart';
 
 void main() {
+  test('복구 스냅샷의 단계 순서와 시각 무결성을 검증한다', () {
+    final at = DateTime.utc(2026, 10, 31, 7);
+    final step = RoutineStep(
+      id: 'a',
+      name: '준비',
+      expected: const Duration(minutes: 10),
+    );
+    final later = RoutineStep(
+      id: 'b',
+      name: '다음',
+      expected: const Duration(minutes: 10),
+    );
+    expect(
+      () => RoutineRun(
+        id: 'r',
+        routineId: 'routine',
+        routineName: '아침',
+        startedAt: at,
+        updatedAt: at,
+        status: RunStatus.running,
+        steps: [
+          StepExecution(step: step, status: StepStatus.pending),
+          StepExecution(step: later, status: StepStatus.active, startedAt: at),
+        ],
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => RoutineRun(
+        id: 'r',
+        routineId: 'routine',
+        routineName: '아침',
+        startedAt: at,
+        updatedAt: at,
+        status: RunStatus.running,
+        steps: [
+          StepExecution(
+            step: step,
+            status: StepStatus.active,
+            startedAt: at.add(const Duration(seconds: 1)),
+          ),
+        ],
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => WakeRecord(
+        id: 'w',
+        observedAt: at,
+        source: WakeSource.manual,
+        status: WakeStatus.pending,
+      ),
+      throwsArgumentError,
+    );
+  });
   test('시각 경계와 날짜의 UTC 속성을 보존한다', () {
     expect(ClockTime.fromMinutes(1439), ClockTime(23, 59));
     expect(() => ClockTime(24, 0), throwsArgumentError);

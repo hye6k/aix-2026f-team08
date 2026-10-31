@@ -10,3 +10,6 @@
 *.jks
 *.keystore
 key.properties
+
+# Python test caches.
+__pycache__/

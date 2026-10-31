@@ -1,0 +1,200 @@
+{
+  "started_at_kst": "2026-10-31T16:41:06.267639+09:00",
+  "device": "emulator-5580",
+  "virtual_device": true,
+  "physical_sound_vibration_verified": false,
+  "cases": [
+    {
+      "key": "screen_foreground",
+      "title": "전면 화면 켜짐 신호 수신",
+      "passed": true,
+      "details": {
+        "background": false,
+        "foreground_activity": null
+      },
+      "events": [
+        "1793432467961 ACTIVITY_SIGNAL android.intent.action.SCREEN_ON; NOT_WAKE_CONFIRMATION"
+      ]
+    },
+    {
+      "key": "exact_permission_denied",
+      "title": "정확한 알람 권한 거부 시 예약 차단",
+      "passed": true,
+      "details": {},
+      "events": [
+        "1793432470759 ACTIVITY_CREATED; DYNAMIC_RECEIVER_ACTIVITY_LIFETIME_ONLY",
+        "1793432470790 EXACT_ALARM_PERMISSION_DENIED"
+      ]
+    },
+    {
+      "key": "alarm_foreground",
+      "title": "전면 예약 알람 수신",
+      "passed": true,
+      "details": {
+        "background": false,
+        "foreground_activity": null
+      },
+      "events": [
+        "1793432478939 ALARM_SCHEDULED at=1793432484934",
+        "1793432484944 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+        "1793432484956 NOTIFICATION_REQUESTED; ACTUAL_SOUND_UNVERIFIED",
+        "1793432484962 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+      ]
+    },
+    {
+      "key": "screen_background",
+      "title": "Activity가 유지된 백그라운드 화면 신호",
+      "passed": true,
+      "details": {
+        "background": true,
+        "foreground_activity": [
+          "topResumedActivity=ActivityRecord{122045787 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t6}"
+        ]
+      },
+      "events": [
+        "1793432492338 ACTIVITY_SIGNAL android.intent.action.SCREEN_ON; NOT_WAKE_CONFIRMATION"
+      ]
+    },
+    {
+      "key": "alarm_background",
+      "title": "백그라운드 예약 알람 수신",
+      "passed": true,
+      "details": {
+        "background": true,
+        "foreground_activity": [
+          "topResumedActivity=ActivityRecord{122045787 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t6}"
+        ]
+      },
+      "events": [
+        "1793432493238 ALARM_SCHEDULED at=1793432499235",
+        "1793432499262 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+        "1793432499420 NOTIFICATION_REQUESTED; ACTUAL_SOUND_UNVERIFIED",
+        "1793432499515 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+      ]
+    },
+    {
+      "key": "alarm_cancel",
+      "title": "예약 취소 뒤 관측 구간 내 미수신",
+      "passed": true,
+      "details": {
+        "window_seconds": 10,
+        "scheduled_delay_seconds": 8
+      },
+      "events": [
+        "1793432500291 ALARM_SCHEDULED at=1793432508193",
+        "1793432503481 ALARM_CANCELLED; NOT_WAKE_CONFIRMATION"
+      ]
+    },
+    {
+      "key": "alarm_replace",
+      "title": "동일 PendingIntent 예약 변경 후 1회 수신",
+      "passed": true,
+      "details": {
+        "old_delay": 6,
+        "new_delay": 14,
+        "early_receipts": 0,
+        "total_receipts": 1
+      },
+      "events": [
+        "1793432512867 ALARM_SCHEDULED at=1793432518865",
+        "1793432512972 ALARM_SCHEDULED at=1793432526966",
+        "1793432526969 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+        "1793432526977 NOTIFICATION_REQUESTED; ACTUAL_SOUND_UNVERIFIED",
+        "1793432526980 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+      ]
+    },
+    {
+      "key": "alarm_process_killed",
+      "title": "백그라운드 프로세스 제거 뒤 알람 수신",
+      "passed": true,
+      "details": {
+        "old_pid": "7791",
+        "absent_after_kill": true,
+        "new_pid": "8124",
+        "foreground_activity": [
+          "topResumedActivity=ActivityRecord{122045787 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t6}"
+        ]
+      },
+      "events": [
+        "1793432529743 ALARM_SCHEDULED at=1793432544741",
+        "1793432544943 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+        "1793432544962 NOTIFICATION_REQUESTED; ACTUAL_SOUND_UNVERIFIED",
+        "1793432544981 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+      ]
+    },
+    {
+      "key": "alarm_force_stopped",
+      "title": "강제 종료 뒤 예약 알람 미수신 관측",
+      "passed": true,
+      "details": {
+        "scheduled_command_count": 1,
+        "expected_observation": "강제 종료 뒤 예약 알람 미수신",
+        "receipts": 0,
+        "window_seconds": 11
+      },
+      "events": [
+        "1793432547319 ACTIVITY_CREATED; DYNAMIC_RECEIVER_ACTIVITY_LIFETIME_ONLY",
+        "1793432547916 ACTIVITY_RESTORED; NO_COMMAND_REPLAY",
+        "1793432547961 ALARM_SCHEDULED at=1793432555958"
+      ]
+    },
+    {
+      "key": "notification_denied",
+      "title": "알림 거부 상태의 알람 수신과 거부 로그",
+      "passed": true,
+      "details": {},
+      "events": [
+        "1793432563121 ACTIVITY_CREATED; DYNAMIC_RECEIVER_ACTIVITY_LIFETIME_ONLY",
+        "1793432563150 ALARM_SCHEDULED at=1793432569135",
+        "1793432569145 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+        "1793432569156 NOTIFICATION_PERMISSION_DENIED",
+        "1793432569165 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+      ]
+    },
+    {
+      "key": "exact_permission_revoked",
+      "title": "정확한 알람 권한 철회 뒤 예약 차단",
+      "passed": true,
+      "details": {
+        "receipts_after_revocation": 0,
+        "control": "ADB appops 변경, 수동 설정 화면 조작과 구분"
+      },
+      "events": [
+        "1793432569869 ALARM_SCHEDULED at=1793432577867",
+        "1793432582454 ACTIVITY_CREATED; DYNAMIC_RECEIVER_ACTIVITY_LIFETIME_ONLY",
+        "1793432582481 EXACT_ALARM_PERMISSION_DENIED"
+      ]
+    },
+    {
+      "key": "alarm_task_removed",
+      "title": "Task 제거 뒤 알람과 화면 신호 관측",
+      "passed": true,
+      "details": {
+        "control": "ADB am stack remove, 화면 스와이프와 구분",
+        "task_id": "26",
+        "task_removed": true,
+        "screen_signal_after_task_removal": false
+      },
+      "events": [
+        "1793432584708 ALARM_SCHEDULED at=1793432602694",
+        "1793432602904 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+        "1793432602924 NOTIFICATION_REQUESTED; ACTUAL_SOUND_UNVERIFIED",
+        "1793432602941 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+      ]
+    },
+    {
+      "key": "alarm_reboot",
+      "title": "재부팅 뒤 알람 자동 복원 여부 관측",
+      "passed": true,
+      "details": {
+        "boot_completed": true,
+        "expected_observation": "재부팅 후 자동 재예약 미구현",
+        "receipts_after_reboot": 0
+      },
+      "events": [
+        "1793432605305 ACTIVITY_CREATED; DYNAMIC_RECEIVER_ACTIVITY_LIFETIME_ONLY",
+        "1793432606440 ALARM_SCHEDULED at=1793432621413"
+      ]
+    }
+  ]
+}

@@ -73,14 +73,19 @@ class ProbeActivity : Activity() {
         val filter = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(receiver, filter)
         registered = true
-        ProbeLog.append(this, "ACTIVITY_CREATED; DYNAMIC_RECEIVER_PROCESS_LIFETIME_ONLY")
-        handleAction(intent)
+        ProbeLog.append(this, "ACTIVITY_CREATED; DYNAMIC_RECEIVER_ACTIVITY_LIFETIME_ONLY")
+        if (savedInstanceState == null) handleAction(intent)
+        else ProbeLog.append(this, "ACTIVITY_RESTORED; NO_COMMAND_REPLAY")
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleAction(intent) }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleAction(intent) }
     private fun handleAction(intent: Intent) {
-        when (intent.getStringExtra("action")) {
-            "schedule" -> schedule(intent.getIntExtra("delay_seconds", 30))
+        val action = intent.getStringExtra("action")
+        val seconds = intent.getIntExtra("delay_seconds", 30)
+        intent.removeExtra("action")
+        intent.removeExtra("delay_seconds")
+        when (action) {
+            "schedule" -> schedule(seconds)
             "cancel" -> cancelAlarm()
         }
         refresh()

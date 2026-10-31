@@ -183,12 +183,14 @@ def no_notification(before):
 def revoked(before):
     allowed()
     launch('schedule', 8)
+    if not wait_for('ALARM_SCHEDULED at=', before, 5):
+        raise RuntimeError('예약 성공을 확인하지 못해 권한 철회 실험을 중단합니다.')
     adb('shell', 'appops', 'set', PKG, 'SCHEDULE_EXACT_ALARM', 'deny')
     time.sleep(11)
     count = sum('ALARM_RECEIVED' in s for s in delta(before))
     launch('schedule')
     denied = wait_for('EXACT_ALARM_PERMISSION_DENIED', before, 5)
-    return denied, {'receipts_after_revocation': count, 'control': 'ADB appops 변경, 수동 설정 화면 조작과 구분'}
+    return denied and count == 0, {'receipts_after_revocation': count, 'control': 'ADB appops 변경, 수동 설정 화면 조작과 구분'}
 
 def task_removed(before):
     allowed()
@@ -208,7 +210,7 @@ def task_removed(before):
     adb('shell', 'input', 'keyevent', '224'); time.sleep(2)
     screen = any('ACTIVITY_SIGNAL android.intent.action.SCREEN_ON' in event for event in delta(before))
     received = wait_for('ALARM_RECEIVED', before, 28)
-    return gone and received, {'control': 'ADB am stack remove, 화면 스와이프와 구분', 'task_id': task, 'task_removed': gone, 'screen_signal_after_task_removal': screen}
+    return gone and received and not screen, {'control': 'ADB am stack remove, 화면 스와이프와 구분', 'task_id': task, 'task_removed': gone, 'screen_signal_after_task_removal': screen}
 
 def rebooted(before):
     allowed()

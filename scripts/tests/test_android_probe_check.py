@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 
 class ProbeVerdictTest(unittest.TestCase):
@@ -52,6 +52,100 @@ class ProbeVerdictTest(unittest.TestCase):
                     "time": SimpleNamespace(sleep=Mock())}
         with patch.dict(self.probe["task_removed"].__globals__, bindings):
             return self.probe["task_removed"]("cursor")
+
+    def reservation_case(self, name, first_ok=True, second_ok=True, receipts=0,
+                         cancelled=True, stale_second=False, early=False):
+        log = ["cursor"]
+        first_event = "100 ALARM_SCHEDULED at=6000"
+        launch = Mock()
+        waits = []
+
+        def launch_action(action, seconds=None):
+            launch(action, seconds)
+            if action == "cancel":
+                if cancelled:
+                    log.append("300 ALARM_CANCELLED")
+            elif seconds in (6, 8) and first_ok:
+                log.append(first_event)
+            elif seconds == 14:
+                if second_ok:
+                    log.append("200 ALARM_SCHEDULED at=14000")
+                elif stale_second:
+                    log.append("200 EXACT_ALARM_PERMISSION_DENIED")
+
+        def delta(cursor):
+            return log[log.index(cursor) + 1:] if cursor is not None else list(log)
+
+        def wait(marker, cursor, *args):
+            waits.append((marker, cursor))
+            if marker == "ALARM_RECEIVED":
+                if receipts:
+                    log.extend(["400 ALARM_RECEIVED"] * receipts)
+                return bool(receipts)
+            return any(marker in event for event in delta(cursor))
+
+        def sleep(seconds):
+            if name == "cancel" and seconds == 10 and receipts:
+                log.extend(["400 ALARM_RECEIVED"] * receipts)
+            if name == "replace" and seconds == 8 and early:
+                log.append("350 ALARM_RECEIVED")
+
+        self.reservation_launch = launch
+        function = self.probe[name]
+        bindings = {"allowed": Mock(), "launch": launch_action,
+                    "delta": delta, "events": lambda: list(log),
+                    "wait_for": wait, "time": SimpleNamespace(sleep=sleep)}
+        with patch.dict(function.__globals__, bindings):
+            result = function("cursor")
+        return result, launch, waits
+
+    def test_cancel_requires_successful_initial_schedule(self):
+        with self.assertRaisesRegex(RuntimeError, "예약 성공"):
+            self.reservation_case("cancel", first_ok=False)
+        self.assertEqual(self.reservation_launch.call_args_list, [call("schedule", 8)])
+
+    def test_cancel_passes_after_successful_schedule_and_no_receipt(self):
+        result, _, _ = self.reservation_case("cancel")
+        self.assertTrue(result[0])
+
+    def test_cancel_fails_if_alarm_still_fires(self):
+        result, _, _ = self.reservation_case("cancel", receipts=1)
+        self.assertFalse(result[0])
+
+    def test_cancel_fails_without_cancel_log(self):
+        result, _, _ = self.reservation_case("cancel", cancelled=False)
+        self.assertFalse(result[0])
+
+    def test_replace_requires_successful_first_schedule(self):
+        with self.assertRaisesRegex(RuntimeError, "예약 성공"):
+            self.reservation_case("replace", first_ok=False, second_ok=True, receipts=1)
+        self.assertEqual(self.reservation_launch.call_args_list, [call("schedule", 6)])
+
+    def test_replace_requires_successful_second_schedule(self):
+        with self.assertRaisesRegex(RuntimeError, "예약 성공"):
+            self.reservation_case("replace", second_ok=False, receipts=1)
+
+    def test_replace_does_not_reuse_first_success_when_second_is_denied(self):
+        with self.assertRaisesRegex(RuntimeError, "예약 성공"):
+            self.reservation_case("replace", second_ok=False, stale_second=True, receipts=1)
+
+    def test_replace_passes_with_two_schedules_and_one_late_receipt(self):
+        result, _, waits = self.reservation_case("replace", receipts=1)
+        self.assertTrue(result[0])
+        scheduled = [cursor for marker, cursor in waits if marker == "ALARM_SCHEDULED at="]
+        self.assertEqual(scheduled, ["cursor", "100 ALARM_SCHEDULED at=6000"])
+
+    def test_replace_fails_if_old_alarm_fires_early(self):
+        result, _, _ = self.reservation_case("replace", early=True, receipts=1)
+        self.assertFalse(result[0])
+
+    def test_replace_fails_if_new_alarm_never_fires(self):
+        result, _, _ = self.reservation_case("replace")
+        self.assertFalse(result[0])
+
+    def test_replace_fails_on_duplicate_receipts(self):
+        result, _, _ = self.reservation_case("replace", receipts=2)
+        self.assertFalse(result[0])
 
     def test_revoked_passes_with_no_receipt_and_new_schedule_denied(self):
         result, _, _ = self.revoked()

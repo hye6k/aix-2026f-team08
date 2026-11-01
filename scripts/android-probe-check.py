@@ -135,6 +135,8 @@ def alarm(before, background=False):
 def cancel(before):
     allowed()
     launch('schedule', 8)
+    if not wait_for('ALARM_SCHEDULED at=', before, 5):
+        raise RuntimeError('예약 성공을 확인하지 못해 취소 실험을 중단합니다.')
     launch('cancel')
     time.sleep(10)
     log = delta(before)
@@ -143,7 +145,13 @@ def cancel(before):
 def replace(before):
     allowed()
     launch('schedule', 6)
+    if not wait_for('ALARM_SCHEDULED at=', before, 5):
+        raise RuntimeError('최초 예약 성공을 확인하지 못해 재예약 실험을 중단합니다.')
+    # 첫 예약 이후의 로그만 확인해 이전 성공을 두 번째 예약 성공으로 재사용하지 않는다.
+    replacement_before = events()[-1]
     launch('schedule', 14)
+    if not wait_for('ALARM_SCHEDULED at=', replacement_before, 5):
+        raise RuntimeError('두 번째 예약 성공을 확인하지 못해 재예약 실험을 중단합니다.')
     time.sleep(8)
     early = sum('ALARM_RECEIVED' in s for s in delta(before))
     received = wait_for('ALARM_RECEIVED', before, 15)

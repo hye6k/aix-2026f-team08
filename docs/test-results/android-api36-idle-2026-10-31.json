@@ -1,0 +1,14 @@
+{
+  "virtual_device": true,
+  "idle_command": "Unable to go deep idle; stopped at INACTIVE",
+  "deep_idle_state_before_alarm": "ACTIVE",
+  "alarm_received": true,
+  "events": [
+    "1793432868242 ALARM_SCHEDULED at=1793432883239",
+    "1793432883246 ALARM_RECEIVED; NOT_WAKE_CONFIRMATION",
+    "1793432883261 NOTIFICATION_REQUESTED; ACTUAL_SOUND_UNVERIFIED",
+    "1793432883274 VIBRATION_REQUESTED has_vibrator=true; ACTUAL_VIBRATION_UNVERIFIED"
+  ],
+  "actual_sound_vibration_verified": false,
+  "deep_idle_verified": false
+}

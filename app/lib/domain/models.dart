@@ -234,6 +234,19 @@ class RoutineRun {
         )) {
       throw ArgumentError('완료 실행에 미처리 단계가 있습니다.');
     }
+    final interrupted = steps
+        .where((s) => s.status == StepStatus.interrupted)
+        .toList();
+    if (status == RunStatus.stopped) {
+      if (interrupted.length != 1) {
+        throw ArgumentError('중단 실행에는 중단된 단계가 정확히 하나 필요합니다.');
+      }
+      if (!interrupted.single.endedAt!.isAtSameMomentAs(endedAt!)) {
+        throw ArgumentError('단계 중단 시각과 실행 종료 시각이 일치하지 않습니다.');
+      }
+    } else if (interrupted.isNotEmpty) {
+      throw ArgumentError('중단 실행에만 중단된 단계가 있을 수 있습니다.');
+    }
     if (wakeRecordId != null) requireText(wakeRecordId!, 'wakeRecordId');
     if (endedAt != null && !endedAt!.isAtSameMomentAs(updatedAt)) {
       throw ArgumentError('종료 시각과 최종 갱신 시각이 일치하지 않습니다.');
@@ -265,7 +278,11 @@ class RoutineRun {
   final String routineName;
   final String? wakeRecordId;
   final DateTime startedAt;
+
+  /// 실행 상태가 마지막으로 전이된 시각. 종료 스냅샷에서는 endedAt과 같다.
   final DateTime updatedAt;
+
+  /// 실행 완료 또는 중단 시각. 사후 편집 시각으로 사용하지 않는다.
   final DateTime? endedAt;
   final RunStatus status;
   final List<StepExecution> steps;
@@ -279,14 +296,28 @@ class RoutineRun {
 }
 
 class DailyPlan {
-  const DailyPlan({
+  DailyPlan({
     required this.arrivalAt,
     required this.departureAt,
     required this.recommendedWakeAt,
     required this.alarmAt,
     required this.bedtimeAt,
     required this.preparation,
-  });
+  }) {
+    requireDuration(preparation, 'preparation');
+    requireDuration(
+      arrivalAt.difference(departureAt),
+      'travelDuration',
+      allowZero: true,
+    );
+    if (!recommendedWakeAt.isAtSameMomentAs(
+      departureAt.subtract(preparation),
+    )) {
+      throw ArgumentError('권장 기상·준비 시간·출발 시각이 일치하지 않습니다.');
+    }
+    requireDuration(alarmAt.difference(bedtimeAt), 'sleepDuration');
+    // 수동 알람은 권장 기상이나 도착보다 늦을 수 있다.
+  }
   final DateTime arrivalAt;
   final DateTime departureAt;
   final DateTime recommendedWakeAt;

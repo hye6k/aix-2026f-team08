@@ -193,6 +193,8 @@ class StepExecution {
   Duration? get actual => endedAt?.difference(startedAt!);
 }
 
+/// 단계 시간의 역행·겹침을 거부하며 단계 사이의 시간 공백은 허용한다.
+/// 자동 전환에서 다음 단계 추적을 즉시 시작할지는 실행 로직의 정책이다.
 class RoutineRun {
   RoutineRun({
     required this.id,

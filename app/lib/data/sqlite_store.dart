@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import '../domain/models.dart';
 import '../domain/ports.dart';
 import 'snapshot_codec.dart';
+import 'run_update_guard.dart';
 
 class SqliteRoutineStore implements RoutineStore {
   SqliteRoutineStore._(this._db);
@@ -132,10 +133,10 @@ class SqliteRoutineStore implements RoutineStore {
       if (old.single['payload'] == payload) {
         return;
       }
-      if (run.revision <= (old.single['revision']! as int) ||
-          old.single['status'] != RunStatus.running.name) {
-        throw StateError('종료 기록 또는 오래된 실행 스냅샷을 덮어쓸 수 없습니다.');
-      }
+      validateRunUpdate(
+        _codec.decodeRun(old.single['payload']! as String),
+        run,
+      );
     }
     await tx.insert('routine_runs', {
       'id': run.id,

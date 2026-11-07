@@ -69,6 +69,32 @@ internal class MorningAlarms(private val context: Context) {
             vibrationPattern = longArrayOf(0, 1000, 500, 1000)
         })
     }
+    fun showWakeCandidate(id: String, at: Long) {
+        require(id.isNotBlank() && at <= System.currentTimeMillis())
+        val candidateChannel = "morning_wake_confirmation_v1"
+        if (Build.VERSION.SDK_INT >= 26) {
+            notifications.createNotificationChannel(NotificationChannel(
+                candidateChannel, "기상 확인 요청", NotificationManager.IMPORTANCE_DEFAULT
+            ))
+        }
+        if ((Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            || !notifications.areNotificationsEnabled()
+            || (Build.VERSION.SDK_INT >= 26 && notifications.getNotificationChannel(candidateChannel).importance == NotificationManager.IMPORTANCE_NONE)) {
+            throw SecurityException("기상 확인 요청 알림 권한을 확인하세요.")
+        }
+        val open = PendingIntent.getActivity(context, 0,
+            Intent(context, MainActivity::class.java).setData(Uri.parse("morning-routine://candidate")),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, candidateChannel) else Notification.Builder(context)
+        notifications.notify("wake-candidate", 1, builder
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("기상 여부를 확인해 주세요")
+            .setContentText("화면 활동이 감지됐어요. 앱에서 확인하거나 취소해 주세요.")
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setContentIntent(open).setOnlyAlertOnce(true).build())
+    }
+    fun clearWakeCandidate() { notifications.cancel("wake-candidate", 1) }
+
     private fun token(id: String, action: String, at: Long = 0): PendingIntent {
         val intent = Intent(context, MorningAlarmReceiver::class.java).setAction(action)
             .setData(Uri.Builder().scheme("morning-routine").authority(action).appendPath(id).build())
@@ -174,6 +200,8 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                 }
                 "schedule" -> { alarms.schedule(requireNotNull(call.argument<String>("id")), requireNotNull(call.argument<Number>("atMillis")).toLong()); result.success(null) }
                 "cancel" -> { alarms.cancel(requireNotNull(call.argument<String>("id"))); result.success(null) }
+                "showWakeCandidate" -> { alarms.showWakeCandidate(requireNotNull(call.argument<String>("id")), requireNotNull(call.argument<Number>("atMillis")).toLong()); result.success(null) }
+                "clearWakeCandidate" -> { alarms.clearWakeCandidate(); result.success(null) }
                 "pendingAlarmEvents" -> { val values = MorningEvents.pending(context); result.success((0 until values.length()).map { MorningEvents.asMap(values.getJSONObject(it)) }) }
                 "acknowledgeAlarmEvent" -> { MorningEvents.acknowledge(context, requireNotNull(call.argument<String>("eventId"))); result.success(null) }
                 else -> result.notImplemented()

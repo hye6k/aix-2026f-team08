@@ -116,6 +116,19 @@ class AndroidMorningPlatform implements AlarmPort, ActivitySignalPort {
     });
   }
 
+  Future<void> showWakeCandidate(WakeRecord candidate) {
+    if (candidate.status != WakeStatus.pending) {
+      throw ArgumentError('미확인 후보만 확인 요청 대상으로 표시합니다.');
+    }
+    return _methods.invokeMethod<void>('showWakeCandidate', {
+      'id': candidate.id,
+      'atMillis': candidate.observedAt.millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> clearWakeCandidate() =>
+      _methods.invokeMethod<void>('clearWakeCandidate');
+
   @override
   Stream<ActivitySignal> get signals => events
       .where((event) => event.kind == AndroidEventKind.screenOn)

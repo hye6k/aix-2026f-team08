@@ -131,6 +131,43 @@ void main() {
     await platform.acknowledgeAlarmEvent(pending.single.id);
     expect(calls.last.arguments, {'eventId': 'event'});
   });
+  test('미확인 후보 확인 요청과 해제를 알람 예약과 분리한다', () async {
+    final at = DateTime.utc(2026, 11, 7, 7);
+    await platform.showWakeCandidate(
+      WakeRecord(
+        id: 'candidate',
+        observedAt: at,
+        source: WakeSource.screenOn,
+        status: WakeStatus.pending,
+      ),
+    );
+    await platform.clearWakeCandidate();
+    expect(calls.map((c) => c.method), [
+      'showWakeCandidate',
+      'clearWakeCandidate',
+    ]);
+    expect(calls.first.arguments, {
+      'id': 'candidate',
+      'atMillis': at.millisecondsSinceEpoch,
+    });
+  });
+  test('확정 기상을 후보 확인 요청으로 표시하지 않는다', () {
+    final at = DateTime.utc(2026, 11, 7, 7);
+    expect(
+      () => platform.showWakeCandidate(
+        WakeRecord(
+          id: 'w',
+          observedAt: at,
+          source: WakeSource.manual,
+          status: WakeStatus.confirmed,
+          decidedAt: at,
+          wakeAt: at,
+        ),
+      ),
+      throwsArgumentError,
+    );
+    expect(calls, isEmpty);
+  });
   test('알람 이벤트에 알람 ID가 없으면 오류로 노출한다', () {
     expect(
       () => AndroidMorningEvent.fromMessage({

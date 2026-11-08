@@ -40,7 +40,7 @@
 
 | 작성자 | PR | 관련 이슈 | 리뷰어 / 상태 |
 |---|---|---|---|
-| 강동혁 (hye6k) | [#5 Android Flutter 개발 환경과 기본 앱 구성](https://github.com/hye6k/aix-2026f-team08/pull/5) | [#4 / T01](https://github.com/hye6k/aix-2026f-team08/issues/4) | 미지정 / 초안, 실기기 검증 및 팀원 리뷰 대기 |
+| 강동혁 (hye6k) | [#5 Android Flutter 개발 환경과 기본 앱 구성](https://github.com/hye6k/aix-2026f-team08/pull/5) | [#4 / T01](https://github.com/hye6k/aix-2026f-team08/issues/4) | heong03 승인 / 2026-10-28 병합 완료, T01 실기기 검증은 별도 대기 |
 
 ### 개발 착수 시 적용 사항 (2026-10-28)
 

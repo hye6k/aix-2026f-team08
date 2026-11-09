@@ -13,8 +13,12 @@ flutter analyze --fatal-infos
 flutter test
 
 if [[ -d android/app/src/test ]]; then
+  # Flutter가 생성하는 wrapper는 Git에서 제외된다. 새 checkout에서는 먼저 준비한다.
+  if [[ ! -f android/gradlew ]]; then
+    flutter build apk --debug --no-pub
+  fi
   (
     cd android
-    ./gradlew :app:testDebugUnitTest
+    bash ./gradlew :app:testDebugUnitTest
   )
 fi

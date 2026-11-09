@@ -25,3 +25,19 @@
 ## 명세 대조 보완 (2026-11-07)
 
 T17의 기상 후보 확인 요청을 위한 별도 알림 채널과 showWakeCandidate/clearWakeCandidate 호출을 추가했다. 기상 알람의 소리 반복·해제·다시 울림과 별개이며 알림을 누르면 앱을 연다. 후보가 확정·취소되면 조립 계층에서 알림을 제거해야 한다. 후보 알림도 알림 권한·채널 차단 오류를 반환한다. 표시 호출 자체가 기상 확정은 아니다. 채널 경계 집중 테스트는 10건이다.
+
+## 2026-11-09 PR #33 예약 실패·권한 철회 보완
+
+예약은 ID와 예약 시각을 포함한 세대별 PendingIntent를 사용한다. 새 OS 예약·상태 저장이 성공한 뒤 이전 토큰과 현재 울림을 정리한다. 같은 토큰의 extras를 먼저 덮어써 이전 알람을 무효화하지 않는다. 이전 버전 토큰도 정리한다.
+
+다시 울림도 기존 알람 해제부터 하지 않는다. 새 예약 실패 시 현재 울림의 취소를 호출하지 않으며, 저장 실패 시 새 예약 정리와 이전 상태 복원을 시도한다. 복구 실패는 오류로 반환한다. 이전 토큰 정리만 실패하면 이미 유효한 새 예약을 취소하지 않고 경고 이벤트를 보존한다. OS와 파일 저장은 원자적이지 않으므로 모든 장애에서 전달을 보장한다고 표현하지 않는다.
+
+알림 권한 철회 후 Receiver가 수신돼도 알림 기반 소리·진동을 전달할 수 없다. 권한을 우회하거나 과거 알람을 임의 재생하지 않는다. alarmError는 이벤트 큐와 별도 최근 오류에 보존한다. MainActivity.onResume → MorningPlatform.onResume에서 권한 위험과 최근 오류를 확인하고 네이티브 안내창·권한 설정 진입을 제공한다. 실행 중 오류도 같은 안내 경로를 사용한다. 큐 소비자가 이벤트를 확인 처리해도 사용자 안내 전 최근 오류를 제거하지 않는다.
+
+안내는 사용자 확인 후 정리하며 설정 변경 후에는 알람을 다시 설정해야 한다. 이 PR 자체의 안내창은 후속 Flutter 세션 조립이 없어도 동작한다. 후속 #24는 pendingAlarmEvents → nativeAlarmChanged → platformError 및 확인 처리 경로를 추가로 연결한다. 후보 확인/취소 알림 제거와 다음 날짜의 명시적 계획은 여전히 조립 계층 책임이다.
+
+검증: 순수 Kotlin 예약 교체 JVM 검사 10건(예약 실패·저장 실패·복구 실패·권한 거부·동일/구버전 토큰·다시 울림·이전 정리 실패), Flutter51/Python20 및 정적 분석·debug 빌드를 확인했다. JVM 검사는 실제 OS 소리·진동 검증이 아니다. CI에도 :app:testDebugUnitTest를 추가했다.
+
+참고: [PendingIntent extras와 동일성](https://developer.android.com/reference/android/app/PendingIntent), [정확한 알람 권한과 철회](https://developer.android.com/develop/background-work/services/alarms).
+
+API36 에뮬레이터에서 미래 예약 → POST_NOTIFICATIONS 철회 → 새 예약 실패 후 이전 예약 시각·OS AlarmManager 항목 보존을 확인했다. 이후 실제 Receiver 수신과 notification_permission_denied 보존, 프로세스 종료·재실행 후 오류 큐 조회 및 “소리와 진동을 전달하지 못했어요” 안내창을 확인했다. 알림 권한 철회로 소리·진동은 검증 성공으로 판정하지 않는다.

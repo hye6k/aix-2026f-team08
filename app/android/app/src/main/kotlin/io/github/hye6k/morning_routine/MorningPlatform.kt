@@ -2,6 +2,7 @@ package io.github.hye6k.morning_routine
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -29,6 +30,7 @@ import java.util.UUID
 
 internal object MorningEvents {
     var sink: EventChannel.EventSink? = null
+    var issueListener: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
     fun pending(context: Context): JSONArray = JSONArray(context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).getString("events", "[]"))
     fun emit(context: Context, kind: String, id: String? = null, scheduledAt: Long? = null, error: String? = null) {
@@ -38,9 +40,17 @@ internal object MorningEvents {
         if (error != null) event.put("error", error)
         if (kind != "screenOn") {
             val records = pending(context).put(event)
-            check(context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).edit().putString("events", records.toString()).commit()) { "알람 이벤트 저장 실패" }
+            val editor = context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).edit().putString("events", records.toString())
+            if (kind == "alarmError") editor.putString("last_alarm_issue", event.toString())
+            check(editor.commit()) { "알람 이벤트 저장 실패" }
         }
-        handler.post { sink?.success(asMap(event)) }
+        handler.post { sink?.success(asMap(event)); if (kind == "alarmError") issueListener?.invoke() }
+    }
+    fun latestIssue(context: Context): JSONObject? = context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).getString("last_alarm_issue", null)?.let { JSONObject(it) }
+    fun dismissIssue(context: Context, id: String) {
+        if (latestIssue(context)?.optString("eventId") == id) {
+            check(context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).edit().remove("last_alarm_issue").commit())
+        }
     }
     fun acknowledge(context: Context, eventId: String) {
         val old = pending(context)
@@ -95,29 +105,49 @@ internal class MorningAlarms(private val context: Context) {
     }
     fun clearWakeCandidate() { notifications.cancel("wake-candidate", 1) }
 
-    private fun token(id: String, action: String, at: Long = 0): PendingIntent {
+    private fun token(id: String, action: String, at: Long = 0, legacy: Boolean = false): PendingIntent {
+        val data = Uri.Builder().scheme("morning-routine").authority(action).appendPath(id)
+        if (!legacy) data.appendPath(at.toString())
         val intent = Intent(context, MorningAlarmReceiver::class.java).setAction(action)
-            .setData(Uri.Builder().scheme("morning-routine").authority(action).appendPath(id).build())
+            .setData(data.build())
             .putExtra("alarmId", id).putExtra("atMillis", at)
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
     private fun state(): JSONObject = JSONObject(prefs.getString("alarms", "{}"))
     private fun save(state: JSONObject) { check(prefs.edit().putString("alarms", state.toString()).commit()) { "알람 상태 저장 실패" } }
+    private fun readSlot(id: String): AlarmSlot? {
+        val value = state().optJSONObject(id) ?: return null
+        return AlarmSlot(id, value.getLong("atMillis"), value.getString("state"), value.optInt("tokenVersion", 1))
+    }
+    private fun arm(slot: AlarmSlot) {
+        val show = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).setData(Uri.Builder().scheme("morning-routine").authority("open").appendPath(slot.id).build()), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        manager.setAlarmClock(AlarmManager.AlarmClockInfo(slot.atMillis, show), token(slot.id, "fire", slot.atMillis, slot.tokenVersion < 2))
+    }
+    private fun cancelToken(slot: AlarmSlot) { manager.cancel(token(slot.id, "fire", slot.atMillis, slot.tokenVersion < 2)) }
     fun schedule(id: String, at: Long) {
-        require(id.isNotBlank() && id.length <= 128) { "유효한 알람 ID가 필요합니다." }
-        require(at > System.currentTimeMillis()) { "알람은 미래 시각이어야 합니다." }
-        if (permissionState().values.any { !it }) throw SecurityException("알림·정확한 알람 권한을 확인하세요.")
-        cancel(id)
-        val show = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).setData(Uri.Builder().scheme("morning-routine").authority("open").appendPath(id).build()), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        manager.setAlarmClock(AlarmManager.AlarmClockInfo(at, show), token(id, "fire", at))
-        try { save(state().put(id, JSONObject().put("atMillis", at).put("state", "scheduled"))) }
-        catch (error: Exception) { manager.cancel(token(id, "fire")); throw error }
+        val backend = object : AlarmReplacementBackend {
+            override fun permitted() = permissionState().values.all { it }
+            override fun read(id: String) = readSlot(id)
+            override fun arm(slot: AlarmSlot) = this@MorningAlarms.arm(slot)
+            override fun cancel(slot: AlarmSlot) = cancelToken(slot)
+            override fun write(slot: AlarmSlot) { save(state().put(slot.id, JSONObject().put("atMillis", slot.atMillis).put("state", slot.state).put("tokenVersion", slot.tokenVersion))) }
+            override fun remove(id: String) { val values = state(); values.remove(id); save(values) }
+            override fun stopRinging(id: String) { notifications.cancel(id, 0) }
+        }
+        val warnings = AlarmReplacement(backend, System::currentTimeMillis).schedule(id, at)
+        if (warnings.isNotEmpty()) MorningEvents.emit(context, "alarmError", id, at, "previous_alarm_cleanup_failed")
     }
     fun cancel(id: String) {
         require(id.isNotBlank())
-        manager.cancel(token(id, "fire"))
+        readSlot(id)?.let { cancelToken(it) }
+        // 이전 버전 PendingIntent도 남기지 않는다.
+        manager.cancel(token(id, "fire", legacy = true))
         notifications.cancel(id, 0)
         val values = state(); values.remove(id); save(values)
+    }
+    fun permissionRisk(): AlarmSlot? {
+        if (permissionState().values.all { it }) return null
+        return state().keys().asSequence().mapNotNull { readSlot(it) }.firstOrNull()
     }
     fun isRinging(id: String, at: Long): Boolean {
         val value = state().optJSONObject(id) ?: return false
@@ -155,19 +185,20 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         val id = intent.getStringExtra("alarmId") ?: return
         if (id.isBlank()) return
         val alarms = MorningAlarms(context)
+        var attemptedAt: Long? = null
         try {
             if (intent.action != "fire" && !alarms.isRinging(id, intent.getLongExtra("atMillis", 0))) return
             when (intent.action) {
                 "fire" -> alarms.fire(id, intent.getLongExtra("atMillis", 0))
                 "dismiss" -> { alarms.cancel(id); MorningEvents.emit(context, "alarmDismissed", id) }
                 "snooze" -> {
-                    alarms.cancel(id)
                     val at = System.currentTimeMillis() + 5 * 60_000L
+                    attemptedAt = at
                     alarms.schedule(id, at)
                     MorningEvents.emit(context, "alarmSnoozed", id, at)
                 }
             }
-        } catch (error: Exception) { MorningEvents.emit(context, "alarmError", id, error = error.javaClass.simpleName) }
+        } catch (error: Exception) { MorningEvents.emit(context, "alarmError", id, attemptedAt, if (intent.action == "snooze") "snooze_failed" else error.javaClass.simpleName) }
     }
 }
 
@@ -176,11 +207,15 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
     private val methods = MethodChannel(messenger, "morning_routine/platform")
     private val events = EventChannel(messenger, "morning_routine/platform_events")
     private val alarms = MorningAlarms(context)
+    private var resumed = false
+    private var issueDialog: AlertDialog? = null
+    private var lastPermissionRisk: String? = null
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { if (intent.action == Intent.ACTION_SCREEN_ON) MorningEvents.emit(context, "screenOn") }
     }
     init {
         methods.setMethodCallHandler(this); events.setStreamHandler(this)
+        MorningEvents.issueListener = { if (resumed) showIssue() }
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
         if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED) else context.registerReceiver(receiver, filter)
     }
@@ -198,7 +233,12 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                     if (Build.VERSION.SDK_INT >= 33) activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
                     result.success(null)
                 }
-                "schedule" -> { alarms.schedule(requireNotNull(call.argument<String>("id")), requireNotNull(call.argument<Number>("atMillis")).toLong()); result.success(null) }
+                "schedule" -> {
+                    val id = requireNotNull(call.argument<String>("id"))
+                    val at = requireNotNull(call.argument<Number>("atMillis")).toLong()
+                    try { alarms.schedule(id, at); result.success(null) }
+                    catch (error: Exception) { MorningEvents.emit(context, "alarmError", id, at, "schedule_failed"); throw error }
+                }
                 "cancel" -> { alarms.cancel(requireNotNull(call.argument<String>("id"))); result.success(null) }
                 "showWakeCandidate" -> { alarms.showWakeCandidate(requireNotNull(call.argument<String>("id")), requireNotNull(call.argument<Number>("atMillis")).toLong()); result.success(null) }
                 "clearWakeCandidate" -> { alarms.clearWakeCandidate(); result.success(null) }
@@ -210,5 +250,43 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         catch (error: SecurityException) { result.error("permission_denied", error.message, null) }
         catch (error: Exception) { result.error("platform_error", error.message, null) }
     }
-    fun close() { methods.setMethodCallHandler(null); events.setStreamHandler(null); MorningEvents.sink = null; context.unregisterReceiver(receiver) }
+    fun onResume() {
+        resumed = true
+        val risk = alarms.permissionRisk()
+        val signature = risk?.let { "${it.id}:${it.atMillis}:${alarms.permissionState()}" }
+        if (risk != null && signature != lastPermissionRisk) {
+            lastPermissionRisk = signature
+            if (MorningEvents.latestIssue(context) == null) MorningEvents.emit(context, "alarmError", risk.id, risk.atMillis, "permission_changed")
+        }
+        if (risk == null) lastPermissionRisk = null
+        showIssue()
+    }
+    fun onPause() { resumed = false }
+    private fun showIssue() {
+        if (!resumed || activity.isFinishing || activity.isDestroyed || issueDialog?.isShowing == true) return
+        val issue = MorningEvents.latestIssue(context) ?: return
+        val message = when (issue.optString("error")) {
+            "notification_permission_denied" -> "알림 권한이 꺼져 알람의 소리와 진동을 전달하지 못했어요. 권한을 확인하고 알람을 다시 설정해 주세요."
+            "permission_changed" -> "알람에 필요한 권한이 변경됐어요. 권한을 확인한 뒤 알람을 다시 설정해 주세요."
+            "snooze_failed" -> "다시 울림을 예약하지 못했어요. 현재 알람 상태를 확인하고 다시 설정해 주세요."
+            else -> "알람 적용에 문제가 있었어요. 알람 상태와 권한을 확인한 뒤 다시 예약해 주세요."
+        }
+        fun acknowledge() { MorningEvents.dismissIssue(context, issue.getString("eventId")) }
+        issueDialog = AlertDialog.Builder(activity).setTitle("알람 상태를 확인해 주세요")
+            .setMessage(message).setCancelable(false)
+            .setPositiveButton("권한 설정") { _, _ ->
+                acknowledge()
+                val intent = if (Build.VERSION.SDK_INT >= 31 && !alarms.permissionState().getValue("exactAlarm"))
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                    else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                activity.startActivity(intent)
+            }
+            .setNegativeButton("확인") { _, _ -> acknowledge() }.show()
+    }
+    fun close() {
+        issueDialog?.dismiss()
+        MorningEvents.issueListener = null
+        methods.setMethodCallHandler(null); events.setStreamHandler(null)
+        MorningEvents.sink = null; context.unregisterReceiver(receiver)
+    }
 }

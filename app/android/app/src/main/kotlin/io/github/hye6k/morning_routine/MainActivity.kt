@@ -9,6 +9,14 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         platform = MorningPlatform(this, flutterEngine.dartExecutor.binaryMessenger)
     }
+    override fun onResume() {
+        super.onResume()
+        platform?.onResume()
+    }
+    override fun onPause() {
+        platform?.onPause()
+        super.onPause()
+    }
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         platform?.close()
         platform = null

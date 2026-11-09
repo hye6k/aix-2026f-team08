@@ -11,3 +11,10 @@ flutter pub get --enforce-lockfile
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze --fatal-infos
 flutter test
+
+if [[ -d android/app/src/test ]]; then
+  (
+    cd android
+    ./gradlew :app:testDebugUnitTest
+  )
+fi

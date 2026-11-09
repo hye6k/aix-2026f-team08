@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// 로컬 JVM에서 예약 교체의 실패·보상 경로를 검증한다.
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}

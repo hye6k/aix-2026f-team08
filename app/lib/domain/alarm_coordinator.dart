@@ -60,9 +60,11 @@ class AlarmCoordinator {
     }
     final previous = _scheduled;
     try {
-      await _cancelCurrent();
-      await port.cancel(request.id);
+      // 동일 ID 교체는 플랫폼의 예약 적용을 먼저 확인한다.
       await port.schedule(request);
+      if (previous != null && previous.id != request.id) {
+        await port.cancel(previous.id);
+      }
       _scheduled = request;
       _lastFailure = null;
       return AlarmApplyResult.scheduled;
@@ -71,13 +73,14 @@ class AlarmCoordinator {
       Object? recoveryError;
       var restored = false;
       try {
-        // 새 예약이 실제 반영된 뒤 응답만 실패했을 수 있으므로 먼저 정리한다.
-        await port.cancel(request.id);
+        // 다른 ID의 부분 적용만 정리한다. 같은 ID나 재시작 전 예약은 먼저 지우지 않는다.
+        if (previous != null && previous.id != request.id) {
+          await port.cancel(request.id);
+        }
         if (previous != null && previous.at.isAfter(clock?.call() ?? now)) {
           if (await port.permission() != AlarmPermission.granted) {
             throw StateError('복구 시 알람 권한이 없습니다.');
           }
-          await port.cancel(previous.id);
           await port.schedule(previous);
           _scheduled = previous;
           restored = true;

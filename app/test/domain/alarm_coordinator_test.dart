@@ -36,7 +36,7 @@ void main() {
     at: now.add(Duration(minutes: minutes)),
   );
 
-  test('중복 적용을 생략하고 설정 변경 시 이전 예약을 먼저 취소한다', () async {
+  test('중복 적용을 생략하고 새 예약 성공 후 이전 ID를 취소한다', () async {
     final port = FakeAlarmPort();
     final coordinator = AlarmCoordinator(port);
     expect(
@@ -51,7 +51,7 @@ void main() {
     expect(port.reservations, {'new': now.add(const Duration(minutes: 20))});
     expect(
       port.events.indexOf('cancel:wake'),
-      lessThan(port.events.indexOf('schedule:new')),
+      greaterThan(port.events.indexOf('schedule:new')),
     );
   });
   test('권한 철회는 기존 예약을 지우고 실패 상태를 명시한다', () async {
@@ -138,7 +138,7 @@ void main() {
       ),
     );
     expect(c.scheduled, isNull);
-    expect(port.reservations, isEmpty);
+    expect(port.reservations, {'wake': request(10).at});
     expect(c.lastFailure, isNotNull);
     port.failSchedule = false;
     await c.apply(request(30), now: now);
@@ -157,7 +157,8 @@ void main() {
         isA<AlarmApplyFailure>().having((f) => f.previousRestored, '복원', false),
       ),
     );
-    expect(port.reservations, isEmpty);
+    expect(port.events.where((e) => e == 'schedule:wake').length, 1);
+    expect(c.scheduled, isNull);
   });
   test('다시 울림 실패도 이전 예약으로 복원하고 캐시 무효화는 OS를 변경하지 않는다', () async {
     final port = FakeAlarmPort();
@@ -175,5 +176,17 @@ void main() {
     expect(c.scheduled, isNull);
     expect(port.events.length, events);
     expect(port.reservations['wake'], request(10).at);
+  });
+  test('재시작 후 캐시가 없어도 예약 실패 전에 기존 OS 예약을 지우지 않는다', () async {
+    final port = FakeAlarmPort();
+    port.reservations['wake'] = request(10).at;
+    final c = AlarmCoordinator(port);
+    port.failAt.add(request(20).at);
+    await expectLater(
+      c.apply(request(20), now: now),
+      throwsA(isA<AlarmApplyFailure>()),
+    );
+    expect(port.reservations, {'wake': request(10).at});
+    expect(port.events.where((e) => e == 'cancel:wake'), isEmpty);
   });
 }

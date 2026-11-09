@@ -7,6 +7,8 @@ class FakeAlarmPort implements AlarmPort {
   final events = <String>[];
   final reservations = <String, DateTime>{};
   bool failSchedule = false;
+  final failAt = <DateTime>{};
+  bool failAfterWrite = false;
   @override
   Future<AlarmPermission> permission() async => allowed;
   @override
@@ -18,11 +20,12 @@ class FakeAlarmPort implements AlarmPort {
   @override
   Future<void> schedule(AlarmRequest request) async {
     await Future<void>.delayed(Duration.zero);
-    if (failSchedule) {
+    if (failSchedule || failAt.contains(request.at)) {
       throw StateError('예약 실패');
     }
     events.add('schedule:${request.id}');
     reservations[request.id] = request.at;
+    if (failAfterWrite && request.at.minute == 20) throw StateError('응답 전 실패');
   }
 }
 
@@ -97,5 +100,80 @@ void main() {
     port.failSchedule = false;
     await coordinator.apply(request(20), now: now);
     expect(port.reservations['wake'], now.add(const Duration(minutes: 20)));
+  });
+  test('같은 ID 변경 실패는 이전 미래 예약을 복원한다', () async {
+    final port = FakeAlarmPort();
+    final coordinator = AlarmCoordinator(port);
+    await coordinator.apply(request(10), now: now);
+    port.failAt.add(request(20).at);
+    await expectLater(
+      coordinator.apply(request(20), now: now),
+      throwsStateError,
+    );
+    expect(port.reservations, {'wake': request(10).at});
+    expect(coordinator.scheduled!.at, request(10).at);
+  });
+  test('다른 ID 변경 실패는 시도한 예약을 정리하고 이전 ID를 복원한다', () async {
+    final port = FakeAlarmPort();
+    final coordinator = AlarmCoordinator(port);
+    await coordinator.apply(request(10), now: now);
+    port.failAfterWrite = true;
+    await expectLater(
+      coordinator.apply(request(20, id: 'new'), now: now),
+      throwsStateError,
+    );
+    expect(port.reservations, {'wake': request(10).at});
+  });
+  test('복원도 실패하면 예약 없음과 두 실패 원인을 반환한다', () async {
+    final port = FakeAlarmPort();
+    final c = AlarmCoordinator(port);
+    await c.apply(request(10), now: now);
+    port.failSchedule = true;
+    await expectLater(
+      c.apply(request(20), now: now),
+      throwsA(
+        isA<AlarmApplyFailure>()
+            .having((f) => f.previousRestored, '복원', false)
+            .having((f) => f.recoveryError, '복원 오류', isNotNull),
+      ),
+    );
+    expect(c.scheduled, isNull);
+    expect(port.reservations, isEmpty);
+    expect(c.lastFailure, isNotNull);
+    port.failSchedule = false;
+    await c.apply(request(30), now: now);
+    expect(c.lastFailure, isNull);
+  });
+  test('복구 도중 지난 이전 알람을 다시 예약하지 않는다', () async {
+    final port = FakeAlarmPort();
+    var current = now;
+    final c = AlarmCoordinator(port, clock: () => current);
+    await c.apply(request(10), now: now);
+    current = now.add(const Duration(minutes: 15));
+    port.failAt.add(request(20).at);
+    await expectLater(
+      c.apply(request(20), now: current),
+      throwsA(
+        isA<AlarmApplyFailure>().having((f) => f.previousRestored, '복원', false),
+      ),
+    );
+    expect(port.reservations, isEmpty);
+  });
+  test('다시 울림 실패도 이전 예약으로 복원하고 캐시 무효화는 OS를 변경하지 않는다', () async {
+    final port = FakeAlarmPort();
+    final c = AlarmCoordinator(port);
+    await c.apply(request(10), now: now);
+    port.failAt.add(request(5).at);
+    await expectLater(
+      c.snooze(id: 'wake', now: now),
+      throwsA(
+        isA<AlarmApplyFailure>().having((f) => f.previousRestored, '복원', true),
+      ),
+    );
+    final events = port.events.length;
+    await c.invalidate();
+    expect(c.scheduled, isNull);
+    expect(port.events.length, events);
+    expect(port.reservations['wake'], request(10).at);
   });
 }

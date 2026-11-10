@@ -1,5 +1,7 @@
 import 'models.dart';
 
+/// 저장소를 연 앱 조립 계층이 수명을 소유하고 화면·서비스에는 주입한다.
+/// 주입받은 소비자는 빌린 저장소를 닫지 않는다.
 abstract interface class RoutineStore {
   Future<AppSettings?> loadSettings();
   Future<void> saveSettings(AppSettings settings);
@@ -10,6 +12,9 @@ abstract interface class RoutineStore {
   Future<void> saveWakeRecord(WakeRecord record);
   Future<List<RoutineRun>> listRuns();
   Future<void> saveRun(RoutineRun run);
+
+  /// 수명 소유자만 호출한다. 모든 소비자의 작업·구독 정리 후 닫는다.
+  /// close 후 재사용하거나 다른 wrapper가 독립 연결이라고 가정하지 않는다.
   Future<void> close();
 }
 

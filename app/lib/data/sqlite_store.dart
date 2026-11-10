@@ -6,6 +6,9 @@ import '../domain/ports.dart';
 import 'snapshot_codec.dart';
 import 'run_update_guard.dart';
 
+/// 같은 파일을 열면 sqflite 기본 singleInstance 연결을 공유할 수 있다.
+/// open을 두 번 호출하는 것은 소유권 두 개나 참조 카운트를 만들지 않는다.
+/// 앱에서 한 번 열어 공유하고 소유자만 마지막에 close한다.
 class SqliteRoutineStore implements RoutineStore {
   SqliteRoutineStore._(this._db);
   final Database _db;

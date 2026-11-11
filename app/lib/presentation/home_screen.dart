@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'settings_screen.dart';
+import 'routine_screen.dart';
+import '../domain/ports.dart';
+
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.store, required this.openStore});
+  final RoutineStore? store;
+  final Future<RoutineStore> Function() openStore;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -9,6 +15,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  bool _opening = false;
+
+  Future<void> _open(Widget screen) async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    await Navigator.of(context)
+        .push<void>(MaterialPageRoute(builder: (_) => screen));
+    if (mounted) setState(() => _opening = false);
+  }
 
   static const _pages = [
     (
@@ -54,7 +69,36 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   Text(page.description, textAlign: TextAlign.center),
                   const SizedBox(height: 24),
-                  const Text('기능을 준비하고 있어요.'),
+                  if (_selectedIndex != 1) const Text('기능을 준비하고 있어요.'),
+                  if (_selectedIndex == 1) ...[
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _opening
+                          ? null
+                          : () => _open(
+                              RoutineLibraryScreen(
+                                store: widget.store,
+                                openStore: widget.openStore,
+                              ),
+                            ),
+                      icon: const Icon(Icons.edit_note),
+                      label: const Text('루틴 관리'),
+                    ),
+                  ],
+                  if (_selectedIndex == 0) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: _opening
+                          ? null
+                          : () => _open(
+                              SettingsScreen(
+                                store: widget.store,
+                                openStore: widget.openStore,
+                              ),
+                            ),
+                      child: const Text('시간 설정'),
+                    ),
+                  ],
                 ],
               ),
             ),

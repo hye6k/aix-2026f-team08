@@ -60,6 +60,17 @@ class MemoryStore implements SessionStore {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class DelayedStore extends MemoryStore {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<AppSettings?> loadSettings() async {
+    entered.complete();
+    await release.future;
+    return super.loadSettings();
+  }
+}
+
 class Platform implements AlarmPort, ActivitySignalPort {
   final input = StreamController<ActivitySignal>.broadcast();
   final scheduled = <AlarmRequest>[];
@@ -359,6 +370,61 @@ void main() {
     await session.retryAlarm();
     expect(session.view.alarmUpdatePending, isFalse);
     expect(platform.scheduled.length, 1);
+  });
+  test('대기 없는 재적용 실패는 대상 시각과 함께 재실행 후에도 남는다', () async {
+    await configured();
+    final at = session.view.plan!.alarmAt;
+    await session.nativeAlarmChanged();
+    platform.failSchedule = true;
+    await expectLater(session.retryAlarm(), throwsStateError);
+    expect(db.checkpoint!.alarmUpdatePending, isTrue);
+    expect(db.checkpoint!.alarmPendingAt, at);
+    await session.close();
+    session = create();
+    await session.initialize();
+    expect(session.view.alarmUpdatePending, isTrue);
+    expect(session.view.alarmPendingAt, at);
+    platform.failSchedule = false;
+    await session.retryAlarm();
+    expect(session.view.alarmUpdatePending, isFalse);
+  });
+  test('초기화 중 종료해도 신호 구독이 남지 않는다', () async {
+    final delayed = DelayedStore();
+    final other = MorningSession(
+      store: delayed,
+      alarmPort: platform,
+      signals: platform,
+      clock: () => now,
+      newId: () => 'id',
+    );
+    final initializing = other.initialize();
+    await delayed.entered.future;
+    final closing = other.close();
+    final closingAgain = other.close();
+    delayed.release.complete();
+    await initializing;
+    await closing;
+    await closingAgain;
+    expect(platform.input.hasListener, isFalse);
+  });
+  test('대기 없는 재적용의 권한 거부와 저장 실패를 구분한다', () async {
+    await configured();
+    await session.nativeAlarmChanged();
+    final count = platform.scheduled.length;
+    db.fail = true;
+    await expectLater(session.retryAlarm(), throwsStateError);
+    expect(platform.scheduled.length, count);
+    db.fail = false;
+    platform.deny = true;
+    await session.retryAlarm();
+    expect(db.checkpoint!.alarmUpdatePending, isTrue);
+    await session.close();
+    session = create();
+    await session.initialize();
+    expect(session.view.alarmUpdatePending, isTrue);
+    platform.deny = false;
+    await session.retryAlarm();
+    expect(session.view.alarmUpdatePending, isFalse);
   });
   test('권한 거부 뒤 재실행해도 저장된 예약 대기를 유지한다', () async {
     platform.deny = true;

@@ -60,6 +60,7 @@ class MorningSession {
   Future<void> _tail = Future<void>.value();
   bool _initialized = false;
   bool _closed = false;
+  Future<void>? _closing;
   List<Routine> _routines = [];
   AppSettings? _settings;
   Routine? _routine;
@@ -236,6 +237,17 @@ class MorningSession {
     if (_checkpoint?.cancellationPending ?? false) {
       await _finishCancellation();
     } else {
+      if (_plan == null) throw StateError('저장된 계획이 없습니다.');
+      if (!(_checkpoint?.alarmUpdatePending ?? false)) {
+        final at = _plan!.alarmAt;
+        await _persist(
+          alarmUpdatePending: true,
+          alarmPendingAt:
+              _wake?.status == WakeStatus.confirmed || !at.isAfter(clock())
+              ? null
+              : at,
+        );
+      }
       await _applyAlarm();
     }
   });
@@ -426,11 +438,11 @@ class MorningSession {
     await _alarms.invalidate();
     _alarmResult = null;
   });
-  Future<void> close() async {
-    if (_closed) return;
+  Future<void> close() => _closing ??= _close();
+  Future<void> _close() async {
     _closed = true;
-    await _subscription?.cancel();
     await _tail;
+    await _subscription?.cancel();
     await _changes.close();
   }
 }

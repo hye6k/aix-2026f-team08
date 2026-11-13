@@ -13,6 +13,7 @@ class ArrivalPrediction {
   final bool isConditional;
 }
 
+/// 남은 준비를 마치고 즉시 출발한다고 가정하며 실제 출발·도착은 추적하지 않는다.
 class ArrivalPredictor {
   ArrivalPredictor({this.activeStepMinimum = const Duration(minutes: 1)}) {
     requireDuration(activeStepMinimum, 'activeStepMinimum');
@@ -33,6 +34,7 @@ class ArrivalPredictor {
       if (run.routineId != routine.id || run.status == RunStatus.stopped) {
         throw StateError('이 루틴의 도착 예상 대상 실행이 아닙니다.');
       }
+      // 저장된 실행 갱신 시각과 비교한다. 이전 계산 시각은 저장하지 않는다.
       if (now.isBefore(run.updatedAt)) {
         throw ArgumentError('실행 기록보다 빠른 현재 시각입니다.');
       }
@@ -43,7 +45,7 @@ class ArrivalPredictor {
         } else if (execution.status == StepStatus.active) {
           final budget =
               execution.step.expected - now.difference(execution.startedAt!);
-          // 초과 중에도 사용자가 완료하기 전까지 준비가 남았음을 표시한다.
+          // 남은 예상이 1분 미만이면 초과 전이라도 최소값을 적용한다.
           remaining += budget < activeStepMinimum ? activeStepMinimum : budget;
         }
       }

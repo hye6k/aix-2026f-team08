@@ -135,7 +135,7 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('루틴을 삭제했어요.')));
       await _load();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -144,7 +144,11 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('루틴을 삭제하지 못했어요. 다시 시도해 주세요.'),
+          content: Text(
+            error is StoreActionBlocked
+                ? error.message
+                : '루틴을 삭제하지 못했어요. 다시 시도해 주세요.',
+          ),
           action: SnackBarAction(
             label: '다시 삭제',
             onPressed: () => _delete(routine),
@@ -428,11 +432,13 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.pop(context, true);
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = '루틴을 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 시도해 주세요.';
+          _error = error is StoreActionBlocked
+              ? error.message
+              : '루틴을 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 시도해 주세요.';
         });
       }
     }

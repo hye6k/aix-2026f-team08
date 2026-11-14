@@ -357,9 +357,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('설정을 저장했어요.')));
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(() => _saveError = '설정을 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 시도해 주세요.');
+        setState(
+          () => _saveError = error is StoreActionBlocked
+              ? error.message
+              : '설정을 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 시도해 주세요.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -8,9 +8,8 @@ import 'package:morning_routine/app/morning_runtime.dart';
 import 'package:morning_routine/platform/android_morning_platform.dart';
 import 'package:morning_routine/domain/ports.dart';
 import 'package:morning_routine/domain/models.dart';
-import 'package:morning_routine/presentation/home_screen.dart';
+import 'package:morning_routine/presentation/integrated_home.dart';
 import 'package:morning_routine/presentation/settings_screen.dart';
-import 'package:morning_routine/application/session_routine_store.dart';
 
 import '../application/morning_session_test.dart'
     show MemoryStore, settings, routine;
@@ -336,9 +335,9 @@ void main() {
       MorningBootstrap(openRuntime: () async => runtime!),
     );
     await tester.pumpAndSettle();
-    final bridge =
-        tester.widget<HomeScreen>(find.byType(HomeScreen)).store
-            as SessionRoutineStore;
+    final bridge = tester
+        .widget<IntegratedHomeScreen>(find.byType(IntegratedHomeScreen))
+        .store;
     expect(bridge.session.store, same(db));
     await tester.tap(find.text('시간 설정'));
     await tester.pumpAndSettle();

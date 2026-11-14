@@ -242,7 +242,7 @@ void main() {
     expect(native.clearPrompts, clears);
     expect(native.prompts, prompts);
   });
-  test('이전 프로세스 권한 오류는 앱 복귀에서 읽어 노출하고 확인 처리한다', () async {
+  test('이전 프로세스 권한 오류는 사용자 확인 전까지 보존한다', () async {
     native.pending.add(
       AndroidMorningEvent.fromMessage({
         'eventId': 'permission-error',
@@ -254,8 +254,34 @@ void main() {
     );
     runtime = await open();
     expect(runtime!.platformError.value, isStateError);
-    expect(native.acknowledgements, ['permission-error']);
+    expect(native.acknowledgements, isEmpty);
+    await runtime!.refreshPlatform();
+    expect(runtime!.platformError.value, isStateError);
+    expect(native.pending.single.id, 'permission-error');
     expect(runtime!.session.view.wake, isNull);
+  });
+  test('여러 오류가 사용자 확인 전 복귀와 재기동을 거쳐도 보존된다', () async {
+    for (final id in ['first', 'second']) {
+      native.pending.add(
+        AndroidMorningEvent.fromMessage({
+          'eventId': id,
+          'kind': 'alarmError',
+          'alarmId': 'morning-wake',
+          'atMillis': now.millisecondsSinceEpoch,
+          'error': 'schedule_failed',
+        }),
+      );
+    }
+    runtime = await open();
+    await runtime!.refreshPlatform();
+    expect(native.pending.map((e) => e.id), ['first', 'second']);
+    await runtime!.close();
+    runtime = await open();
+    expect(native.pending.map((e) => e.id), ['first', 'second']);
+    await native.acknowledgeAlarmEvent('first'); // 사용자 확인을 모의한다.
+    await runtime!.refreshPlatform();
+    expect(native.pending.map((e) => e.id), ['second']);
+    expect(runtime!.platformError.value, isStateError);
   });
   test('네이티브 다시 울림 이벤트는 재예약 없이 캐시를 무효화한다', () async {
     runtime = await open();

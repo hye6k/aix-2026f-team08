@@ -102,11 +102,18 @@ class MorningRuntime with WidgetsBindingObserver {
 
   Future<void> _enqueue(AndroidMorningEvent event) {
     final result = _nativeTail.then((_) async {
-      if (!event.persisted || _handled.contains(event.id)) return;
-      await session.nativeAlarmChanged();
+      if (!event.persisted) return;
       if (event.kind == AndroidEventKind.alarmError) {
         platformError.value = StateError(event.error ?? 'Android 알람 오류');
+        if (!_handled.contains(event.id)) {
+          await session.nativeAlarmChanged();
+          _handled.add(event.id);
+        }
+        // 오류는 네이티브 확인창에서 사용자가 확인할 때까지 보존한다.
+        return;
       }
+      if (_handled.contains(event.id)) return;
+      await session.nativeAlarmChanged();
       await platform.acknowledgeAlarmEvent(event.id);
       _handled.add(event.id);
     });

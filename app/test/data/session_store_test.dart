@@ -177,6 +177,9 @@ void main() {
     final loaded = (await store.loadSession())!;
     expect(loaded.alarmUpdatePending, isTrue);
     expect(loaded.alarmPendingAt, at);
+    expect(loaded.alarmPendingAt!.isUtc, isTrue);
+    expect(loaded.alarmPendingAt!.toLocal().isAtSameMomentAs(at), isTrue);
+    expect(loaded.alarmPendingAt!.toLocal(), at.toLocal());
   });
   test('활성 루틴 직접 삭제는 복원을 망가뜨리지 않고 거부한다', () async {
     await store.commitSession(

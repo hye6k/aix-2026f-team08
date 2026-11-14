@@ -46,11 +46,19 @@ internal object MorningEvents {
         }
         handler.post { sink?.success(asMap(event)); if (kind == "alarmError") issueListener?.invoke() }
     }
-    fun latestIssue(context: Context): JSONObject? = context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).getString("last_alarm_issue", null)?.let { JSONObject(it) }
-    fun dismissIssue(context: Context, id: String) {
-        if (latestIssue(context)?.optString("eventId") == id) {
-            check(context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).edit().remove("last_alarm_issue").commit())
+    fun latestIssue(context: Context): JSONObject? {
+        val items = pending(context)
+        for (i in 0 until items.length()) {
+            val item = items.getJSONObject(i)
+            if (item.optString("kind") == "alarmError") return item
         }
+        return context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE).getString("last_alarm_issue", null)?.let { JSONObject(it) }
+    }
+    fun dismissIssue(context: Context, id: String) {
+        acknowledge(context, id)
+        val prefs = context.getSharedPreferences("morning_platform", Context.MODE_PRIVATE)
+        val legacy = prefs.getString("last_alarm_issue", null)?.let { JSONObject(it) }
+        if (legacy?.optString("eventId") == id) check(prefs.edit().remove("last_alarm_issue").commit())
     }
     fun acknowledge(context: Context, eventId: String) {
         val old = pending(context)
@@ -271,7 +279,7 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
             "snooze_failed" -> "다시 울림을 예약하지 못했어요. 현재 알람 상태를 확인하고 다시 설정해 주세요."
             else -> "알람 적용에 문제가 있었어요. 알람 상태와 권한을 확인한 뒤 다시 예약해 주세요."
         }
-        fun acknowledge() { MorningEvents.dismissIssue(context, issue.getString("eventId")) }
+        fun acknowledge() { MorningEvents.dismissIssue(context, issue.getString("eventId")); handlerAfterIssue() }
         issueDialog = AlertDialog.Builder(activity).setTitle("알람 상태를 확인해 주세요")
             .setMessage(message).setCancelable(false)
             .setPositiveButton("권한 설정") { _, _ ->
@@ -283,6 +291,7 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
             }
             .setNegativeButton("확인") { _, _ -> acknowledge() }.show()
     }
+    private fun handlerAfterIssue() { Handler(Looper.getMainLooper()).post { showIssue() } }
     fun close() {
         issueDialog?.dismiss()
         MorningEvents.issueListener = null

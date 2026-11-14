@@ -58,6 +58,7 @@ class _MorningBootstrapState extends State<MorningBootstrap> {
         runtime: runtime,
         child: MorningRoutineApp(
           messengerKey: _messenger,
+          runtime: runtime,
           store: SessionRoutineStore(
             runtime.session,
             onAlarmPending: () {

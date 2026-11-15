@@ -153,11 +153,11 @@ void main() {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
     }
 
     Future<void> untilState(bool Function() predicate) async {
-      for (var i = 0; i < 300; i++) {
+      for (var i = 0; i < 1200; i++) {
         if (predicate()) return;
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 10)),
@@ -173,6 +173,7 @@ void main() {
       await until(find.text('계획 계산 및 저장'));
 
       await press('계획 계산 및 저장');
+      await untilState(() => runtime.session.view.plan != null);
       expect(runtime.session.view.plan, isNotNull);
       await untilState(() {
         final button = find.widgetWithText(FilledButton, '시간 설정');

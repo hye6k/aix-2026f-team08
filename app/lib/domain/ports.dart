@@ -1,5 +1,16 @@
 import 'models.dart';
 
+/// 저장된 변경의 Android 알람 적용이 대기 중인지 편집 화면에 제공한다.
+abstract interface class AlarmUpdateStatus {
+  bool get alarmUpdatePending;
+}
+
+/// 소비자가 현재 앱 상태에서 수행할 수 없는 편집 작업을 설명한다.
+class StoreActionBlocked implements Exception {
+  const StoreActionBlocked(this.message);
+  final String message;
+}
+
 /// 저장소를 연 앱 조립 계층이 수명을 소유하고 화면·서비스에는 주입한다.
 /// 주입받은 소비자는 빌린 저장소를 닫지 않는다.
 abstract interface class RoutineStore {

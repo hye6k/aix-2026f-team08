@@ -54,6 +54,12 @@ class RoutineTestStore implements RoutineStore {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class PendingRoutineTestStore extends RoutineTestStore
+    implements AlarmUpdateStatus {
+  @override
+  bool get alarmUpdatePending => true;
+}
+
 Future<void> openLibrary(WidgetTester tester, RoutineStore store) async {
   await tester.pumpWidget(MorningRoutineApp(store: store));
   await tester.tap(find.text('루틴'));
@@ -85,6 +91,16 @@ Future<void> icon(WidgetTester tester, String tooltip) async {
 }
 
 void main() {
+  testWidgets('루틴 저장 후 알람 적용 대기를 성공 메시지와 구분한다', (tester) async {
+    final store = PendingRoutineTestStore()..routines['routine-old'] = sample();
+    await openLibrary(tester, store);
+    await press(tester, '등교');
+    await press(tester, '루틴 저장');
+    expect(store.saves, 1);
+    expect(find.textContaining('루틴은 저장했지만 알람 적용이 대기 중'), findsWidgets);
+    expect(find.text('루틴을 저장했어요.'), findsNothing);
+  });
+
   testWidgets('신규 등록·동명 단계·순서 변경과 안정적인 ID', (tester) async {
     final store = RoutineTestStore();
     await openLibrary(tester, store);

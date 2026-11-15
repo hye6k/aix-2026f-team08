@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'morning_runtime.dart';
+import '../application/session_routine_store.dart';
 
 class MorningBootstrap extends StatefulWidget {
   const MorningBootstrap({super.key, this.openRuntime});
@@ -54,7 +55,7 @@ class _MorningBootstrapState extends State<MorningBootstrap> {
     if (runtime != null) {
       return MorningScope(
         runtime: runtime,
-        child: MorningRoutineApp(store: runtime.store),
+        child: MorningRoutineApp(store: SessionRoutineStore(runtime.session)),
       );
     }
     return MaterialApp(

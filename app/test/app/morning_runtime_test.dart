@@ -10,6 +10,7 @@ import 'package:morning_routine/domain/ports.dart';
 import 'package:morning_routine/domain/models.dart';
 import 'package:morning_routine/presentation/home_screen.dart';
 import 'package:morning_routine/presentation/settings_screen.dart';
+import 'package:morning_routine/application/session_routine_store.dart';
 
 import '../application/morning_session_test.dart'
     show MemoryStore, settings, routine;
@@ -335,12 +336,15 @@ void main() {
       MorningBootstrap(openRuntime: () async => runtime!),
     );
     await tester.pumpAndSettle();
-    expect(tester.widget<HomeScreen>(find.byType(HomeScreen)).store, same(db));
+    final bridge =
+        tester.widget<HomeScreen>(find.byType(HomeScreen)).store
+            as SessionRoutineStore;
+    expect(bridge.session.store, same(db));
     await tester.tap(find.text('시간 설정'));
     await tester.pumpAndSettle();
     expect(
       tester.widget<SettingsScreen>(find.byType(SettingsScreen)).store,
-      same(db),
+      same(bridge),
     );
     tester.state<NavigatorState>(find.byType(Navigator).last).pop();
     await tester.pumpAndSettle();

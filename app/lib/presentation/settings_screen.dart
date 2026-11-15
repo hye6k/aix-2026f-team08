@@ -355,11 +355,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _baseline = _fingerprint();
       });
       ScaffoldMessenger.of(context).clearSnackBars();
+      final status = _store;
+      final message =
+          status is AlarmUpdateStatus &&
+              (status as AlarmUpdateStatus).alarmUpdatePending
+          ? '설정은 저장했지만 알람 적용이 대기 중이에요. 알람 상태를 확인해 주세요.'
+          : '설정을 저장했어요.';
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('설정을 저장했어요.')));
-    } catch (_) {
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
       if (mounted) {
-        setState(() => _saveError = '설정을 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 시도해 주세요.');
+        setState(
+          () => _saveError = error is StoreActionBlocked
+              ? error.message
+              : '설정을 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 시도해 주세요.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

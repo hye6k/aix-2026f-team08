@@ -12,7 +12,6 @@ abstract final class _Colors {
   static const forest = Color(0xff214d41);
   static const text = Color(0xff20352e);
   static const muted = Color(0xff596e65);
-  static const peach = Color(0xfff5dfd2);
   static const outline = Color(0xffe8e6da);
 }
 
@@ -95,14 +94,16 @@ class _Routine {
     this.origin,
     this.destination,
     this.deadline,
-    this.days,
-  );
+    this.days, {
+    this.wake,
+  });
   final int id;
   final String name;
   final int origin;
   final int destination;
   final TimeOfDay deadline;
   final Set<int> days;
+  final TimeOfDay? wake;
 }
 
 const _days = ['월', '화', '수', '목', '금', '토', '일'];
@@ -113,9 +114,17 @@ String _dayText(Set<int> days) => [
 
 /// 앱 제품 저장소와 분리된 UX 시안이다.
 class MorningConceptScreen extends StatefulWidget {
-  const MorningConceptScreen({super.key, this.now, this.persist = true});
+  const MorningConceptScreen({
+    super.key,
+    this.now,
+    this.persist = true,
+    this.existing,
+    this.developerOptions = false,
+  });
   final DateTime? now;
   final bool persist;
+  final Widget? existing;
+  final bool developerOptions;
   @override
   State<MorningConceptScreen> createState() => _MorningConceptScreenState();
 }
@@ -131,6 +140,11 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   bool _saving = false;
   String? _storageError;
   Timer? _clockTimer;
+  bool _mockActive = false;
+  String _mockTodayStatus = 'pending';
+  List<_Place>? _originalPlaces;
+  List<_Routine>? _originalRoutines;
+  int? _originalNextId;
   late final Future<SharedPreferences> _preferences =
       SharedPreferences.getInstance();
 
@@ -185,6 +199,12 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                 e['destination'] as int,
                 TimeOfDay(hour: e['hour'] as int, minute: e['minute'] as int),
                 (e['days'] as List).cast<int>().toSet(),
+                wake: e['wakeHour'] == null
+                    ? null
+                    : TimeOfDay(
+                        hour: e['wakeHour'] as int,
+                        minute: e['wakeMinute'] as int,
+                      ),
               ),
             )
             .toList();
@@ -200,7 +220,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   }
 
   Future<bool> _save(List<_Place> places, List<_Routine> routines) async {
-    if (!widget.persist) return true;
+    if (!widget.persist || _mockActive) return true;
     if (_saving) return false;
     _saving = true;
     try {
@@ -228,6 +248,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                 'hour': r.deadline.hour,
                 'minute': r.deadline.minute,
                 'days': r.days.toList(),
+                'wakeHour': r.wake?.hour,
+                'wakeMinute': r.wake?.minute,
               },
           ],
         }),
@@ -396,52 +418,109 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     ],
   );
 
-  (_Routine, DateTime)? _nextRoutine(DateTime now) {
-    (_Routine, DateTime)? next;
-    for (var offset = 0; offset <= 7; offset++) {
-      final day = DateTime(now.year, now.month, now.day + offset);
-      for (final routine in _routines) {
-        if (!routine.days.contains(day.weekday)) continue;
-        final deadline = DateTime(
-          day.year,
-          day.month,
-          day.day,
-          routine.deadline.hour,
-          routine.deadline.minute,
-        );
-        if (!deadline.isAfter(now)) continue;
-        if (next == null || deadline.isBefore(next.$2)) {
-          next = (routine, deadline);
-        }
-      }
+  _Routine? _routineOn(DateTime day) =>
+      _routines.where((r) => r.days.contains(day.weekday)).firstOrNull;
+
+  Future<void> _chooseWake(_Routine routine) async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: routine.wake ?? const TimeOfDay(hour: 7, minute: 0),
+      builder: (_, child) => Theme(data: _conceptTheme(), child: child!),
+    );
+    if (selected == null || !mounted) return;
+    final updated = [
+      for (final r in _routines)
+        if (r.id == routine.id)
+          _Routine(
+            r.id,
+            r.name,
+            r.origin,
+            r.destination,
+            r.deadline,
+            r.days,
+            wake: selected,
+          )
+        else
+          r,
+    ];
+    if (!await _save(_places, updated) || !mounted) return;
+    setState(() {
+      _routines
+        ..clear()
+        ..addAll(updated);
+    });
+  }
+
+  void _mockExample({bool rest = false}) {
+    if (!_mockActive) {
+      _originalPlaces = [..._places];
+      _originalRoutines = [..._routines];
+      _originalNextId = _nextId;
     }
-    return next;
+    final now = widget.now ?? DateTime.now();
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final later = DateTime(now.year, now.month, now.day + 2);
+    setState(() {
+      _mockActive = true;
+      _mockTodayStatus = 'pending';
+      _places
+        ..clear()
+        ..addAll([
+          _Place(0, '집', '예시 위치', latitude: 37.5, longitude: 127),
+          _Place(1, '회사', '예시 위치', latitude: 37.6, longitude: 127.1),
+        ]);
+      _routines
+        ..clear()
+        ..add(
+          _Routine(
+            2,
+            '출근',
+            0,
+            1,
+            const TimeOfDay(hour: 9, minute: 0),
+            rest ? {later.weekday} : {now.weekday, tomorrow.weekday},
+            wake: const TimeOfDay(hour: 7, minute: 0),
+          ),
+        );
+      _nextId = 3;
+      _tab = 0;
+    });
+  }
+
+  void _restoreOriginal() {
+    if (!_mockActive) return;
+    setState(() {
+      _places
+        ..clear()
+        ..addAll(_originalPlaces!);
+      _routines
+        ..clear()
+        ..addAll(_originalRoutines!);
+      _nextId = _originalNextId!;
+      _mockActive = false;
+      _originalPlaces = null;
+      _originalRoutines = null;
+      _originalNextId = null;
+    });
   }
 
   Widget _today() {
     final now = widget.now ?? DateTime.now();
-    final next = _nextRoutine(now);
-    final active = next?.$1;
-    final deadline = next?.$2;
-    final daysAway = deadline == null
-        ? 0
-        : DateTime.utc(
-            deadline.year,
-            deadline.month,
-            deadline.day,
-          ).difference(DateTime.utc(now.year, now.month, now.day)).inDays;
-    final when = deadline == null
-        ? ''
-        : '${daysAway == 0
-              ? '오늘'
-              : daysAway == 1
-              ? '내일'
-              : '${deadline.month}월 ${deadline.day}일'} · ${_days[deadline.weekday - 1]}요일';
-    final missingCoordinates =
-        active != null &&
-        _places
-            .where((p) => p.id == active.origin || p.id == active.destination)
-            .any((p) => p.latitude == null || p.longitude == null);
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final todayRoutine = _routineOn(now);
+    final isDone = _mockActive && _mockTodayStatus != 'pending';
+    final showToday = todayRoutine != null && !isDone;
+    final active = showToday ? todayRoutine : _routineOn(tomorrow);
+    final day = showToday ? now : tomorrow;
+    final when = '${showToday ? '오늘' : '내일'} · ${_days[day.weekday - 1]}요일';
+    final wake = active?.wake;
+    final wakeAt = wake == null
+        ? null
+        : DateTime(day.year, day.month, day.day, wake.hour, wake.minute);
+    final remaining = wakeAt?.difference(now);
+    final minutes = remaining == null ? 0 : (remaining.inSeconds / 60).ceil();
+    final duration =
+        '${minutes ~/ 60 > 0 ? '${minutes ~/ 60}시간 ' : ''}${minutes % 60}분';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -452,20 +531,37 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         const SizedBox(height: 8),
         const Text('다음으로 예정된 아침 루틴', style: TextStyle(color: _Colors.muted)),
         const SizedBox(height: 22),
+        if (_mockActive)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text('예시 데이터 사용 중', style: TextStyle(color: _Colors.muted)),
+          ),
         if (active == null)
-          _card('예정된 루틴이 없어요', [
-            const Text(
-              '장소와 아침 루틴을 만들고 적용 요일을 선택해 주세요.',
-              style: TextStyle(height: 1.5),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () => setState(() => _tab = 2),
-                child: const Text('루틴 관리하기'),
+          _card(
+            _routines.isEmpty
+                ? '아침 루틴이 없어요'
+                : isDone
+                ? '내일은 쉬는 날이에요'
+                : '오늘과 내일은 쉬는 날이에요',
+            [
+              Text(
+                _routines.isEmpty
+                    ? '관리에서 아침 루틴을 만들어 주세요.'
+                    : isDone
+                    ? '내일 적용되는 루틴이 없어요.'
+                    : '오늘과 내일 적용되는 루틴이 없어요.',
+                style: const TextStyle(height: 1.5),
               ),
-            ),
-          ])
+              if (_routines.isEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _tab = 2),
+                    child: const Text('루틴 만들기'),
+                  ),
+                ),
+            ],
+          )
         else ...[
           Container(
             padding: const EdgeInsets.all(22),
@@ -476,13 +572,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '$when · ${active.name}',
-                  style: const TextStyle(color: Color(0xffc2dccd)),
-                ),
+                Text(when, style: const TextStyle(color: Color(0xffc2dccd))),
                 const SizedBox(height: 14),
                 Text(
-                  '${_placeName(active.origin)} → ${_placeName(active.destination)}',
+                  _placeName(active.destination),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -501,30 +594,33 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             ),
           ),
           const SizedBox(height: 16),
-          if (missingCoordinates)
-            _card('장소 위치를 확인해 주세요', [
-              const Text(
-                '출발지나 도착지에 지도 좌표가 없어 나중에 자동 감지 기준으로 사용할 수 없어요.',
-                style: TextStyle(height: 1.5),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => setState(() => _tab = 2),
-                  child: const Text('장소 관리하기'),
-                ),
-              ),
-            ]),
-          _card('아직 예측할 기록이 없어요', const [
+          _card('기상 시간', [
             Text(
-              '수면·기상·이동 기록이 쌓이면 필요한 시간을 안내할 수 있어요.',
-              style: TextStyle(height: 1.5),
+              active.wake == null
+                  ? '원하는 기상 시간을 정해 주세요.'
+                  : '${active.wake!.format(context)}에 일어나기',
+              style: const TextStyle(fontSize: 16),
             ),
-          ]),
-          _card('예정 루틴 기준', const [
-            Text(
-              '현재 시안은 요일과 도착 마감 시각으로 다음 루틴을 찾아요. 실제 사이클의 진행·완료 여부와 자동 알림은 아직 연결되지 않았어요.',
-              style: TextStyle(height: 1.5),
+            if (remaining != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                remaining.isNegative || remaining == Duration.zero
+                    ? '설정한 기상 시각이 지났어요.'
+                    : '지금 잠들면 기상 시각까지 $duration 남아요.',
+                style: const TextStyle(color: _Colors.muted, fontSize: 13),
+              ),
+            ],
+            const SizedBox(height: 8),
+            const Text(
+              '기상 알람은 아직 연결되지 않았어요.',
+              style: TextStyle(color: _Colors.muted, fontSize: 13),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => _chooseWake(active),
+                child: Text(active.wake == null ? '기상 시간 정하기' : '기상 시간 변경'),
+              ),
             ),
           ]),
         ],
@@ -615,6 +711,51 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           label: const Text('아침 루틴 만들기'),
         ),
       ]),
+      if (widget.developerOptions)
+        _card('개발자 옵션', [
+          const Text(
+            '예시 데이터는 실제 설정을 바꾸지 않아요.',
+            style: TextStyle(color: _Colors.muted, fontSize: 12),
+          ),
+          TextButton(
+            onPressed: () => _mockExample(),
+            child: const Text('예시 루틴 불러오기'),
+          ),
+          TextButton(
+            onPressed: () => _mockExample(rest: true),
+            child: const Text('오늘·내일 휴식 예시 보기'),
+          ),
+          if (_mockActive) ...[
+            const Text('오늘 루틴 상태 (예시)'),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final entry in const [
+                  ('pending', '미완료'),
+                  ('completed', '완료'),
+                  ('failed', '실패'),
+                ])
+                  ChoiceChip(
+                    label: Text(entry.$2),
+                    selected: _mockTodayStatus == entry.$1,
+                    onSelected: (_) =>
+                        setState(() => _mockTodayStatus = entry.$1),
+                  ),
+              ],
+            ),
+            TextButton(
+              onPressed: _restoreOriginal,
+              child: const Text('원래 데이터로 돌아가기'),
+            ),
+          ],
+          if (widget.existing != null)
+            TextButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute<void>(builder: (_) => widget.existing!)),
+              child: const Text('기존 앱 화면 열기'),
+            ),
+        ]),
     ],
   );
 
@@ -622,10 +763,6 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   Widget build(BuildContext context) => Theme(
     data: _conceptTheme(),
     child: Scaffold(
-      appBar: AppBar(
-        backgroundColor: _Colors.background,
-        title: const Text('새 UX 시안'),
-      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -633,18 +770,6 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: _Colors.peach,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    '시안 · 장소와 루틴은 별도 저장 · 실제 감지·알림 없음',
-                    style: TextStyle(fontSize: 12, color: Color(0xff704637)),
-                  ),
-                ),
-                const SizedBox(height: 22),
                 if (_loading)
                   const Center(child: CircularProgressIndicator())
                 else if (_storageError != null)
@@ -669,7 +794,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.wb_sunny_outlined),
-                  label: '다가오는 아침',
+                  label: '홈',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.calendar_month_outlined),

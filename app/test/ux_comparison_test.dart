@@ -8,19 +8,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  testWidgets('비교 모드와 기본 앱 전환', (tester) async {
+  testWidgets('새 화면에서 시작하고 관리의 개발자 옵션에서 기존 화면을 연다', (tester) async {
     await tester.pumpWidget(const MorningRoutineApp(compareUi: true));
-    await tester.tap(find.text('새 UX 시안 보기'));
     await tester.pumpAndSettle();
     expect(find.text('나의 아침을\n가볍게 준비해요'), findsOneWidget);
-    await tester.binding.handlePopRoute();
+    expect(find.text('새 UX 시안 보기'), findsNothing);
+    await tester.ensureVisible(find.text('시작하기'));
+    await tester.tap(find.text('시작하기'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('기존 앱 보기'));
+    await tester.ensureVisible(find.text('기존 앱 화면 열기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('기존 앱 화면 열기'));
     await tester.pumpAndSettle();
     expect(find.text('나에게 맞는 아침을 준비해요'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('두 가지 흐름을 비교해 보세요'), findsOneWidget);
+    expect(find.text('아침 관리'), findsOneWidget);
   });
 
   testWidgets('장소 조합과 요일 배정, 오늘 적용 및 중복 방지', (tester) async {
@@ -67,10 +70,11 @@ void main() {
     await tapText('월');
     await tapText('루틴 저장');
     expect(find.text('출근'), findsOneWidget);
-    await tapText('다가오는 아침');
-    expect(find.text('오늘 · 월요일 · 출근'), findsOneWidget);
-    expect(find.text('집 → 회사'), findsOneWidget);
-    expect(find.text('아직 예측할 기록이 없어요'), findsOneWidget);
+    await tapText('홈');
+    expect(find.text('오늘 · 월요일'), findsOneWidget);
+    expect(find.text('회사'), findsOneWidget);
+    expect(find.text('집 → 회사'), findsNothing);
+    expect(find.text('기상 시간 정하기'), findsOneWidget);
     await tapText('관리');
     await tapText('아침 루틴 만들기');
     await tapText('월');
@@ -114,7 +118,7 @@ void main() {
       MaterialApp(home: MorningConceptScreen(now: DateTime(2026, 11, 9, 8))),
     );
     await tester.pumpAndSettle();
-    expect(find.text('오늘 · 월요일 · 출근'), findsOneWidget);
+    expect(find.text('오늘 · 월요일'), findsOneWidget);
     await tester.tap(find.text('관리').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('집'));
@@ -122,18 +126,120 @@ void main() {
     expect(find.text('선택한 좌표: 37.100000, 127.100000'), findsOneWidget);
   });
 
+  testWidgets('예시 데이터의 완료·실패는 내일로 전환하고 원본은 보존한다', (tester) async {
+    final original = jsonEncode({
+      'nextId': 3,
+      'places': [
+        {'id': 0, 'name': '내 집', 'location': '주소', 'lat': 37.1, 'lng': 127.1},
+        {'id': 1, 'name': '내 회사', 'location': '주소', 'lat': 37.2, 'lng': 127.2},
+      ],
+      'routines': [
+        {
+          'id': 2,
+          'name': '내 출근',
+          'origin': 0,
+          'destination': 1,
+          'hour': 9,
+          'minute': 0,
+          'days': [1],
+        },
+      ],
+    });
+    SharedPreferences.setMockInitialValues({'ux_location_draft_v1': original});
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MorningConceptScreen(
+          now: DateTime(2026, 11, 9, 10),
+          developerOptions: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> tapVisible(String label) async {
+      final target = find.text(label).last;
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+
+    await tapVisible('관리');
+    await tapVisible('예시 루틴 불러오기');
+    expect(find.text('오늘 · 월요일'), findsOneWidget);
+    await tapVisible('관리');
+    await tapVisible('완료');
+    await tapVisible('홈');
+    expect(find.text('내일 · 화요일'), findsOneWidget);
+    expect(find.text('지금 잠들면 기상 시각까지 21시간 0분 남아요.'), findsOneWidget);
+    await tapVisible('관리');
+    await tapVisible('실패');
+    await tapVisible('홈');
+    expect(find.text('내일 · 화요일'), findsOneWidget);
+    await tapVisible('관리');
+    await tapVisible('원래 데이터로 돌아가기');
+    expect(
+      (await SharedPreferences.getInstance()).getString('ux_location_draft_v1'),
+      original,
+    );
+    await tapVisible('홈');
+    expect(find.text('내 회사'), findsOneWidget);
+  });
+
+  testWidgets('직접 정한 기상 시각을 저장하고 실제 알람과 구분한다', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'ux_location_draft_v1': jsonEncode({
+        'nextId': 3,
+        'places': [
+          {'id': 0, 'name': '집', 'location': '주소', 'lat': 37.1, 'lng': 127.1},
+          {'id': 1, 'name': '회사', 'location': '주소', 'lat': 37.2, 'lng': 127.2},
+        ],
+        'routines': [
+          {
+            'id': 2,
+            'name': '출근',
+            'origin': 0,
+            'destination': 1,
+            'hour': 9,
+            'minute': 0,
+            'days': [1],
+          },
+        ],
+      }),
+    });
+    await tester.pumpWidget(
+      MaterialApp(home: MorningConceptScreen(now: DateTime(2026, 11, 9, 8))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('기상 알람은 아직 연결되지 않았어요.'), findsOneWidget);
+    await tester.ensureVisible(find.text('기상 시간 정하기'));
+    await tester.tap(find.text('기상 시간 정하기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    final data = jsonDecode(
+      (await SharedPreferences.getInstance()).getString(
+        'ux_location_draft_v1',
+      )!,
+    ) as Map<String, dynamic>;
+    expect(data['routines'][0]['wakeHour'], 7);
+    expect(data['routines'][0]['wakeMinute'], 0);
+    expect(find.text('기상 시간 변경'), findsOneWidget);
+    expect(find.text('설정한 기상 시각이 지났어요.'), findsOneWidget);
+  });
+
   for (final scenario in [
-    (DateTime(2026, 11, 9, 8, 59), '오늘 · 월요일 · 출근'),
-    (DateTime(2026, 11, 9, 9), '내일 · 화요일 · 출근'),
-    (DateTime(2026, 11, 13, 10), '11월 16일 · 월요일 · 출근'),
-    (DateTime(2026, 11, 15, 23), '내일 · 월요일 · 출근'),
+    (DateTime(2026, 11, 9, 8, 59), '오늘 · 월요일'),
+    (DateTime(2026, 11, 9, 10), '오늘 · 월요일'),
+    (DateTime(2026, 11, 13, 10), '오늘 · 금요일'),
+    (DateTime(2026, 11, 14, 10), '오늘과 내일은 쉬는 날이에요'),
+    (DateTime(2026, 11, 15, 23), '내일 · 월요일'),
   ]) {
-    testWidgets('가까운 예정 루틴: ${scenario.$1}', (tester) async {
+    testWidgets('오늘·내일 홈: ${scenario.$1}', (tester) async {
       SharedPreferences.setMockInitialValues({
         'ux_location_draft_v1': jsonEncode({
           'nextId': 3,
           'places': [
-            {'id': 0, 'name': '집', 'location': '주소', 'lat': null, 'lng': null},
+            {'id': 0, 'name': '집', 'location': '주소', 'lat': 37.1, 'lng': 127.1},
             {
               'id': 1,
               'name': '회사',
@@ -160,8 +266,6 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text(scenario.$2), findsOneWidget);
-      expect(find.text('장소 위치를 확인해 주세요'), findsOneWidget);
-      expect(find.text('아직 예측할 기록이 없어요'), findsOneWidget);
     });
   }
 }

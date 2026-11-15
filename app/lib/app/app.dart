@@ -44,7 +44,10 @@ class MorningRoutineApp extends StatelessWidget {
         ),
       ),
       home: kDebugMode && compareUi
-          ? UxComparisonScreen(existing: _existing(editor))
+          ? MorningConceptScreen(
+              existing: _existing(editor),
+              developerOptions: true,
+            )
           : _existing(editor),
     );
   }

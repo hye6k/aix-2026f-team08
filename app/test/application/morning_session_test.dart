@@ -261,6 +261,38 @@ void main() {
     expect(session.view.wake!.wakeAt, at);
     expect(session.view.run, isNull);
   });
+  test('다른 날짜의 수동 기상은 기록과 알람 취소를 변경하지 않는다', () async {
+    await configured();
+    final commits = db.commits;
+    final cancellations = platform.cancelled.length;
+    await expectLater(
+      session.recordManualWake(now.subtract(const Duration(days: 1))),
+      throwsArgumentError,
+    );
+    expect(db.commits, commits);
+    expect(db.wakes, isEmpty);
+    expect(platform.cancelled.length, cancellations);
+    expect(session.view.cancellationPending, isFalse);
+  });
+  test('자정을 넘는 계획의 수동 기상은 도착일이 아닌 권장 기상일을 사용한다', () async {
+    now = DateTime.utc(2026, 11, 8, 0, 30);
+    await session.initialize();
+    await session.configure(
+      settings: AppSettings(
+        arrivalTime: ClockTime(0, 20),
+        travelDuration: const Duration(minutes: 30),
+        sleepDuration: const Duration(hours: 8),
+        wakeMode: WakeMode.recommended,
+        detectionStart: ClockTime(23, 0),
+        detectionEnd: ClockTime(1, 0),
+      ),
+      routine: routine(),
+      arrivalDay: DateTime.utc(2026, 11, 8),
+    );
+    final wakeAt = DateTime.utc(2026, 11, 7, 23, 45);
+    await session.recordManualWake(wakeAt);
+    expect(session.view.wake!.wakeAt, wakeAt);
+  });
   test('복원 시 실행 경과를 반영하고 OS 알람을 다시 예약하지 않는다', () async {
     await configured();
     await candidate();

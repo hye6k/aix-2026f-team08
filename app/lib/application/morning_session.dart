@@ -362,6 +362,13 @@ class MorningSession {
     if (_wake?.status == WakeStatus.confirmed) {
       throw StateError('이미 확정한 기상이 있습니다.');
     }
+    final wakeDay = _plan!.recommendedWakeAt.toLocal();
+    final selectedDay = at.toLocal();
+    if (wakeDay.year != selectedDay.year ||
+        wakeDay.month != selectedDay.month ||
+        wakeDay.day != selectedDay.day) {
+      throw ArgumentError('현재 계획의 권장 기상일에 해당하는 시각을 입력해 주세요.');
+    }
     final next = _wakeTracker.recordManual(
       id: newId(),
       wakeAt: at,

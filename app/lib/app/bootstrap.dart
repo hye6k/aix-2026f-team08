@@ -55,7 +55,10 @@ class _MorningBootstrapState extends State<MorningBootstrap> {
     if (runtime != null) {
       return MorningScope(
         runtime: runtime,
-        child: MorningRoutineApp(store: SessionRoutineStore(runtime.session)),
+        child: MorningRoutineApp(
+          runtime: runtime,
+          store: SessionRoutineStore(runtime.session),
+        ),
       );
     }
     return MaterialApp(

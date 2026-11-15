@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:morning_routine/app/bootstrap.dart';
 import 'package:morning_routine/app/morning_runtime.dart';
 import 'package:morning_routine/application/session_routine_store.dart';
 import 'package:morning_routine/data/sqlite_store.dart';
@@ -141,18 +143,14 @@ void main() {
         arrivalDay: now,
       );
       native.failSchedule = true;
-      var warnings = 0;
-      final editing = SessionRoutineStore(
-        runtime.session,
-        onAlarmPending: () => warnings++,
-      );
+      final editing = SessionRoutineStore(runtime.session);
       await editing.saveSettings(settings(45));
       expect(
         (await editor.loadSettings())!.travelDuration,
         const Duration(minutes: 45),
       );
       expect(runtime.session.view.alarmUpdatePending, isTrue);
-      expect(warnings, 1);
+      expect(editing.alarmUpdatePending, isTrue);
       native.failSchedule = false;
       await runtime.session.retryAlarm();
       expect(runtime.session.view.alarmUpdatePending, isFalse);
@@ -161,6 +159,81 @@ void main() {
       await runtime.close();
       await stream.close();
       await dir.delete(recursive: true);
+    }
+  });
+  testWidgets('실제 설정 저장 중 알람 실패를 저장 성공과 함께 안내한다', (tester) async {
+    final dir = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('bridge-widget-'),
+    ))!;
+    late MorningRuntime runtime;
+    late TestNative native;
+    late StreamController<Object?> stream;
+    await tester.runAsync(() async {
+      final opened = await open('${dir.path}/app.db');
+      runtime = opened.$1;
+      native = opened.$2;
+      stream = opened.$3;
+      await runtime.session.configure(
+        settings: settings(),
+        routine: routine(),
+        arrivalDay: now,
+      );
+      native.failSchedule = true;
+    });
+    try {
+      await tester.pumpWidget(
+        MorningBootstrap(openRuntime: () async => runtime),
+      );
+      for (var i = 0; i < 200 && find.text('시간 설정').evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      await tester.tap(find.text('시간 설정'));
+      for (
+        var i = 0;
+        i < 300 && find.byType(TextFormField).evaluate().length < 2;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      final field = find.byType(TextFormField).at(1);
+      await tester.ensureVisible(field);
+      await tester.enterText(field, '45');
+      await tester.ensureVisible(find.text('설정 저장'));
+      await tester.tap(find.text('설정 저장'));
+      for (
+        var i = 0;
+        i < 300 && !runtime.session.view.alarmUpdatePending;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        (await tester.runAsync(() => runtime.store.loadSettings()))!
+            .travelDuration,
+        const Duration(minutes: 45),
+      );
+      expect(find.textContaining('알람 적용이 대기 중'), findsWidgets);
+      expect(find.text('설정을 저장했어요.'), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() async {
+        await runtime.close();
+        await stream.close();
+        await dir.delete(recursive: true);
+      });
     }
   });
 }

@@ -355,8 +355,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _baseline = _fingerprint();
       });
       ScaffoldMessenger.of(context).clearSnackBars();
+      final status = _store;
+      final message =
+          status is AlarmUpdateStatus &&
+              (status as AlarmUpdateStatus).alarmUpdatePending
+          ? '설정은 저장했지만 알람 적용이 대기 중이에요. 알람 상태를 확인해 주세요.'
+          : '설정을 저장했어요.';
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('설정을 저장했어요.')));
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (mounted) {
         setState(

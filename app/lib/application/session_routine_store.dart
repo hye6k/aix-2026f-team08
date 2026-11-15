@@ -5,10 +5,12 @@ import 'session_port.dart';
 
 /// 기존 편집 화면이 앱 소유 저장소를 빌려 사용하도록 연결한다.
 /// 활성 계획의 변경은 세션 트랜잭션과 알람 적용 경계를 거친다.
-class SessionRoutineStore implements RoutineStore {
-  SessionRoutineStore(this.session, {this.onAlarmPending});
+class SessionRoutineStore implements RoutineStore, AlarmUpdateStatus {
+  SessionRoutineStore(this.session);
   final MorningSession session;
-  final void Function()? onAlarmPending;
+  @override
+  bool get alarmUpdatePending =>
+      session.view.alarmUpdatePending || session.view.cancellationPending;
   SessionStore get _store => session.store;
 
   @override
@@ -47,9 +49,6 @@ class SessionRoutineStore implements RoutineStore {
     } catch (_) {
       // 계획은 DB에 먼저 저장되므로 OS 적용 실패를 저장 실패로 표시하지 않는다.
       if (!saved() || !session.view.alarmUpdatePending) rethrow;
-    }
-    if (session.view.alarmUpdatePending || session.view.cancellationPending) {
-      onAlarmPending?.call();
     }
   }
 

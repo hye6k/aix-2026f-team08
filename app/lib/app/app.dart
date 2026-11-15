@@ -6,20 +6,13 @@ import '../domain/ports.dart';
 import '../data/sqlite_store.dart';
 
 class MorningRoutineApp extends StatelessWidget {
-  const MorningRoutineApp({
-    super.key,
-    this.store,
-    this.openStore,
-    this.messengerKey,
-  });
+  const MorningRoutineApp({super.key, this.store, this.openStore});
   final RoutineStore? store;
   final Future<RoutineStore> Function()? openStore;
-  final GlobalKey<ScaffoldMessengerState>? messengerKey;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      scaffoldMessengerKey: messengerKey,
       title: '수면과 아침 루틴',
       debugShowCheckedModeBanner: false,
       locale: const Locale('ko'),

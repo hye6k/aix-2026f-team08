@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../presentation/home_screen.dart';
@@ -6,6 +7,7 @@ import '../domain/ports.dart';
 import '../data/sqlite_store.dart';
 import '../application/session_routine_store.dart';
 import '../presentation/integrated_home.dart';
+import '../presentation/ux_comparison.dart';
 import 'morning_runtime.dart';
 
 class MorningRoutineApp extends StatelessWidget {
@@ -14,10 +16,12 @@ class MorningRoutineApp extends StatelessWidget {
     this.store,
     this.openStore,
     this.runtime,
+    this.compareUi = const bool.fromEnvironment('UX_COMPARE'),
   });
   final RoutineStore? store;
   final Future<RoutineStore> Function()? openStore;
   final MorningRuntime? runtime;
+  final bool compareUi;
 
   @override
   Widget build(BuildContext context) {
@@ -29,25 +33,31 @@ class MorningRoutineApp extends StatelessWidget {
       supportedLocales: const [Locale('ko')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData(
+        splashFactory: kDebugMode && compareUi ? InkRipple.splashFactory : null,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF416C63)),
       ),
       darkTheme: ThemeData(
+        splashFactory: kDebugMode && compareUi ? InkRipple.splashFactory : null,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF416C63),
           brightness: Brightness.dark,
         ),
       ),
-      home: runtime == null
-          ? HomeScreen(
-              store: store,
-              openStore: openStore ?? SqliteRoutineStore.openDefault,
-            )
-          : IntegratedHomeScreen(
-              runtime: runtime!,
-              store: editor is SessionRoutineStore
-                  ? editor
-                  : SessionRoutineStore(runtime!.session),
-            ),
+      home: kDebugMode && compareUi
+          ? UxComparisonScreen(existing: _existing(editor))
+          : _existing(editor),
     );
   }
+
+  Widget _existing(RoutineStore? editor) => runtime == null
+      ? HomeScreen(
+          store: store,
+          openStore: openStore ?? SqliteRoutineStore.openDefault,
+        )
+      : IntegratedHomeScreen(
+          runtime: runtime!,
+          store: editor is SessionRoutineStore
+              ? editor
+              : SessionRoutineStore(runtime!.session),
+        );
 }

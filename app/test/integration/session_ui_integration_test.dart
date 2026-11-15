@@ -210,6 +210,13 @@ void main() {
       expect(runtime.session.view.wake!.status, WakeStatus.confirmed);
       await press('루틴 시작');
       await until(find.textContaining('경과 시간'));
+      await tester.tap(find.text('계획').last);
+      await tester.pump();
+      await press('계획 계산 및 저장');
+      await until(find.text('진행 중인 루틴을 완료하거나 중단한 뒤 계획을 변경해 주세요.'));
+      expect(runtime.session.view.run!.status, RunStatus.running);
+      await tester.tap(find.text('진행').last);
+      await tester.pump();
       await press('현재 단계 완료');
       await untilState(
         () => runtime.session.view.run?.activeStep?.step.id == 'meal',

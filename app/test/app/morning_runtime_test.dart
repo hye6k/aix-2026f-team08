@@ -282,6 +282,9 @@ void main() {
     await runtime!.refreshPlatform();
     expect(native.pending.map((e) => e.id), ['second']);
     expect(runtime!.platformError.value, isStateError);
+    await native.acknowledgeAlarmEvent('second');
+    await runtime!.refreshPlatform();
+    expect(runtime!.platformError.value, isNull);
   });
   test('네이티브 다시 울림 이벤트는 재예약 없이 캐시를 무효화한다', () async {
     runtime = await open();

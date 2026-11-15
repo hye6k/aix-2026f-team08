@@ -119,9 +119,6 @@ class _IntegratedHomeScreenState extends State<IntegratedHomeScreen> {
         setState(
           () => _notice = error is StoreActionBlocked
               ? error.message
-              : session.view.alarmUpdatePending ||
-                    session.view.cancellationPending
-              ? '변경 내용은 저장됐지만 알람을 적용하지 못했어요. 권한을 확인하고 다시 시도해 주세요.'
               : '처리하지 못했어요. 입력과 저장 상태를 확인하고 다시 시도해 주세요.',
         );
       }
@@ -147,6 +144,10 @@ class _IntegratedHomeScreenState extends State<IntegratedHomeScreen> {
   }
 
   Future<void> _applyPlan() async {
+    if (session.view.run?.status == RunStatus.running) {
+      setState(() => _notice = '진행 중인 루틴을 완료하거나 중단한 뒤 계획을 변경해 주세요.');
+      return;
+    }
     final settings = _settings;
     final selected = _routines.where((r) => r.id == _selectedId);
     if (settings == null || selected.length != 1) {
@@ -165,13 +166,11 @@ class _IntegratedHomeScreenState extends State<IntegratedHomeScreen> {
 
   Future<void> _manualWake() async {
     final now = session.clock();
-    final day = await showDatePicker(
-      context: context,
-      initialDate: DateUtils.dateOnly(now),
-      firstDate: DateUtils.dateOnly(now.subtract(const Duration(days: 30))),
-      lastDate: DateUtils.dateOnly(now),
-    );
-    if (!mounted || day == null) return;
+    final day = session.view.plan!.recommendedWakeAt.toLocal();
+    if (DateUtils.dateOnly(day).isAfter(DateUtils.dateOnly(now.toLocal()))) {
+      setState(() => _notice = '계획의 기상일이 아직 지나지 않아 기상 시각을 입력할 수 없어요.');
+      return;
+    }
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
@@ -389,6 +388,10 @@ class _IntegratedHomeScreenState extends State<IntegratedHomeScreen> {
               onPressed: _busy ? null : _manualWake,
               child: const Text('기상 시각 직접 입력'),
             ),
+          if (v.plan != null && wake?.status != WakeStatus.confirmed)
+            Text(
+              '현재 계획의 기상일 ${_date(v.plan!.recommendedWakeAt.toLocal())}에 기록해요.',
+            ),
           if (kDebugMode &&
               v.plan != null &&
               wake?.status != WakeStatus.confirmed)
@@ -515,7 +518,17 @@ class _IntegratedHomeScreenState extends State<IntegratedHomeScreen> {
                           valueListenable: widget.runtime.platformError,
                           builder: (_, error, child) => error == null
                               ? const SizedBox.shrink()
-                              : const Text('Android 알람 또는 알림 동작을 확인해 주세요.'),
+                              : Column(
+                                  children: [
+                                    const Text(
+                                      '기기 연동 상태를 확인하지 못했어요. 상태를 다시 확인해 주세요.',
+                                    ),
+                                    _action(
+                                      '기기 상태 다시 확인',
+                                      widget.runtime.refreshPlatform,
+                                    ),
+                                  ],
+                                ),
                         ),
                         if (v.alarmUpdatePending || v.cancellationPending)
                           _card('알람 적용 확인 필요', [

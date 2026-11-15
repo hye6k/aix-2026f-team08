@@ -157,8 +157,8 @@ class MorningRuntime with WidgetsBindingObserver {
 
   Future<void> _refreshPlatform() async {
     if (_closed) return;
-    platformError.value = null;
     permissions.value = await platform.permissions();
+    platformError.value = null;
     for (final event in await platform.pendingAlarmEvents()) {
       await _enqueue(event);
     }

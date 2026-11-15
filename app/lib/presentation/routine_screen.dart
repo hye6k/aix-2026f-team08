@@ -427,8 +427,15 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
       setState(() {
         _allowPop = true;
       });
+      final status = widget.store;
+      final message =
+          status is AlarmUpdateStatus &&
+              (status as AlarmUpdateStatus).alarmUpdatePending
+          ? '루틴은 저장했지만 알람 적용이 대기 중이에요. 알람 상태를 확인해 주세요.'
+          : '루틴을 저장했어요.';
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('루틴을 저장했어요.')));
+          .showSnackBar(SnackBar(content: Text(message)));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.pop(context, true);
       });

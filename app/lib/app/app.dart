@@ -13,19 +13,16 @@ class MorningRoutineApp extends StatelessWidget {
     super.key,
     this.store,
     this.openStore,
-    this.messengerKey,
     this.runtime,
   });
   final RoutineStore? store;
   final Future<RoutineStore> Function()? openStore;
-  final GlobalKey<ScaffoldMessengerState>? messengerKey;
   final MorningRuntime? runtime;
 
   @override
   Widget build(BuildContext context) {
     final editor = store;
     return MaterialApp(
-      scaffoldMessengerKey: messengerKey,
       title: '수면과 아침 루틴',
       debugShowCheckedModeBanner: false,
       locale: const Locale('ko'),

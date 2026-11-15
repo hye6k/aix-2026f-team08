@@ -348,10 +348,6 @@ void main() {
     tester.state<NavigatorState>(find.byType(Navigator).last).pop();
     await tester.pumpAndSettle();
     expect(await runtime!.store.loadSettings(), isNull);
-    bridge.onAlarmPending!();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('알람 적용이 대기 중'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('기동 실패 화면은 재시도하며 원본 오류를 노출하지 않는다', (tester) async {

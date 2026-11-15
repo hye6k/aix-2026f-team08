@@ -17,7 +17,6 @@ class _MorningBootstrapState extends State<MorningBootstrap> {
   MorningRuntime? _runtime;
   bool _failed = false;
   bool _opening = false;
-  final _messenger = GlobalKey<ScaffoldMessengerState>();
   @override
   void initState() {
     super.initState();
@@ -57,19 +56,8 @@ class _MorningBootstrapState extends State<MorningBootstrap> {
       return MorningScope(
         runtime: runtime,
         child: MorningRoutineApp(
-          messengerKey: _messenger,
           runtime: runtime,
-          store: SessionRoutineStore(
-            runtime.session,
-            onAlarmPending: () {
-              if (!mounted) return;
-              _messenger.currentState?.showSnackBar(
-                const SnackBar(
-                  content: Text('변경 내용은 저장했지만 알람 적용이 대기 중이에요. 알람 상태를 확인해 주세요.'),
-                ),
-              );
-            },
-          ),
+          store: SessionRoutineStore(runtime.session),
         ),
       );
     }

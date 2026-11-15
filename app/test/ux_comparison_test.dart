@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morning_routine/app/app.dart';
 import 'package:morning_routine/presentation/ux_comparison.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('비교 모드와 기본 앱 전환', (tester) async {
     await tester.pumpWidget(const MorningRoutineApp(compareUi: true));
     await tester.tap(find.text('새 UX 시안 보기'));
@@ -21,8 +25,9 @@ void main() {
 
   testWidgets('장소 조합과 요일 배정, 오늘 적용 및 중복 방지', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: MorningConceptScreen(today: 1)),
+      const MaterialApp(home: MorningConceptScreen(today: 1, persist: false)),
     );
+    await tester.pumpAndSettle();
     Future<void> tapText(String text) async {
       final finder = find.text(text).last;
       await tester.ensureVisible(finder);
@@ -71,5 +76,44 @@ void main() {
     await tester.pumpWidget(const MorningRoutineApp());
     expect(find.text('나에게 맞는 아침을 준비해요'), findsOneWidget);
     expect(find.text('두 가지 흐름을 비교해 보세요'), findsNothing);
+  });
+
+  testWidgets('저장된 장소 좌표와 루틴이 재진입 후 복원된다', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'ux_location_draft_v1': jsonEncode({
+        'nextId': 3,
+        'places': [
+          {'id': 0, 'name': '집', 'location': '집 주소', 'lat': 37.1, 'lng': 127.1},
+          {
+            'id': 1,
+            'name': '회사',
+            'location': '회사 주소',
+            'lat': 37.2,
+            'lng': 127.2,
+          },
+        ],
+        'routines': [
+          {
+            'id': 2,
+            'name': '출근',
+            'origin': 0,
+            'destination': 1,
+            'hour': 9,
+            'minute': 0,
+            'days': [1],
+          },
+        ],
+      }),
+    });
+    await tester.pumpWidget(
+      const MaterialApp(home: MorningConceptScreen(today: 1)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('오늘의 루틴 · 출근'), findsOneWidget);
+    await tester.tap(find.text('관리').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('집'));
+    await tester.pumpAndSettle();
+    expect(find.text('선택한 좌표: 37.100000, 127.100000'), findsOneWidget);
   });
 }

@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'location_picker.dart';
 
 abstract final class _Colors {
   static const background = Color(0xfff8f5ee);
@@ -46,7 +51,7 @@ class UxComparisonScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              '기존 앱은 실제 저장소를 사용합니다. 새 시안의 입력은 임시 데이터이며 저장·알림·감지를 실행하지 않습니다.',
+              '기존 앱과 새 시안은 별도 데이터를 사용합니다. 새 시안의 자동 감지와 알림은 아직 동작하지 않습니다.',
             ),
             const SizedBox(height: 28),
             FilledButton.icon(
@@ -74,10 +79,12 @@ class UxComparisonScreen extends StatelessWidget {
 }
 
 class _Place {
-  _Place(this.id, this.name, this.location);
+  _Place(this.id, this.name, this.location, {this.latitude, this.longitude});
   final int id;
   final String name;
   final String location;
+  final double? latitude;
+  final double? longitude;
 }
 
 class _Routine {
@@ -103,10 +110,11 @@ String _dayText(Set<int> days) => [
     if (days.contains(i)) _days[i - 1],
 ].join(' · ');
 
-/// 앱 데이터와 무관한 임시 메모리 기반의 UX 시안이다.
+/// 앱 제품 저장소와 분리된 UX 시안이다.
 class MorningConceptScreen extends StatefulWidget {
-  const MorningConceptScreen({super.key, this.today});
+  const MorningConceptScreen({super.key, this.today, this.persist = true});
   final int? today;
+  final bool persist;
   @override
   State<MorningConceptScreen> createState() => _MorningConceptScreenState();
 }
@@ -117,6 +125,106 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
   int _nextId = 0;
   int _tab = 0;
   bool _started = false;
+  bool _loading = true;
+  bool _saving = false;
+  String? _storageError;
+  late final Future<SharedPreferences> _preferences =
+      SharedPreferences.getInstance();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final raw = widget.persist
+          ? (await _preferences).getString('ux_location_draft_v1')
+          : null;
+      if (raw != null) {
+        final data = jsonDecode(raw) as Map<String, dynamic>;
+        final places = (data['places'] as List)
+            .map(
+              (e) => _Place(
+                e['id'] as int,
+                e['name'] as String,
+                e['location'] as String,
+                latitude: (e['lat'] as num?)?.toDouble(),
+                longitude: (e['lng'] as num?)?.toDouble(),
+              ),
+            )
+            .toList();
+        final routines = (data['routines'] as List)
+            .map(
+              (e) => _Routine(
+                e['id'] as int,
+                e['name'] as String,
+                e['origin'] as int,
+                e['destination'] as int,
+                TimeOfDay(hour: e['hour'] as int, minute: e['minute'] as int),
+                (e['days'] as List).cast<int>().toSet(),
+              ),
+            )
+            .toList();
+        _places.addAll(places);
+        _routines.addAll(routines);
+        _nextId = data['nextId'] as int;
+        _started = true;
+      }
+    } catch (_) {
+      _storageError = '저장된 시안 데이터를 불러오지 못했어요. 다시 실행해 주세요.';
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<bool> _save(List<_Place> places, List<_Routine> routines) async {
+    if (!widget.persist) return true;
+    if (_saving) return false;
+    _saving = true;
+    try {
+      final saved = await (await _preferences).setString(
+        'ux_location_draft_v1',
+        jsonEncode({
+          'nextId': _nextId,
+          'places': [
+            for (final p in places)
+              {
+                'id': p.id,
+                'name': p.name,
+                'location': p.location,
+                'lat': p.latitude,
+                'lng': p.longitude,
+              },
+          ],
+          'routines': [
+            for (final r in routines)
+              {
+                'id': r.id,
+                'name': r.name,
+                'origin': r.origin,
+                'destination': r.destination,
+                'hour': r.deadline.hour,
+                'minute': r.deadline.minute,
+                'days': r.days.toList(),
+              },
+          ],
+        }),
+      );
+      if (!saved) throw StateError('저장 실패');
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('저장하지 못했어요. 다시 시도해 주세요.')));
+      }
+      return false;
+    } finally {
+      _saving = false;
+    }
+  }
+
   String _placeName(int id) =>
       _places.where((p) => p.id == id).firstOrNull?.name ?? '알 수 없는 장소';
 
@@ -133,6 +241,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
       ),
     );
     if (result == null || !mounted) return;
+    final updated = [..._places];
+    final found = updated.indexWhere((p) => p.id == result.id);
+    if (found < 0) {
+      updated.add(result);
+    } else {
+      updated[found] = result;
+    }
+    if (!await _save(updated, _routines) || !mounted) return;
     setState(() {
       final index = _places.indexWhere((p) => p.id == result.id);
       if (index < 0) {
@@ -159,6 +275,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
       ),
     );
     if (result == null || !mounted) return;
+    final updated = [..._routines];
+    final found = updated.indexWhere((r) => r.id == result.id);
+    if (found < 0) {
+      updated.add(result);
+    } else {
+      updated[found] = result;
+    }
+    if (!await _save(_places, updated) || !mounted) return;
     setState(() {
       final index = _routines.indexWhere((r) => r.id == result.id);
       if (index < 0) {
@@ -441,12 +565,16 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
-                    '시안 · 입력은 임시로만 유지되며 실제 감지·알림 없음',
+                    '시안 · 장소와 루틴은 별도 저장 · 실제 감지·알림 없음',
                     style: TextStyle(fontSize: 12, color: Color(0xff704637)),
                   ),
                 ),
                 const SizedBox(height: 22),
-                if (!_started)
+                if (_loading)
+                  const Center(child: CircularProgressIndicator())
+                else if (_storageError != null)
+                  Text(_storageError!)
+                else if (!_started)
                   _intro()
                 else if (_tab == 0)
                   _today()
@@ -496,6 +624,34 @@ class _PlaceEditorState extends State<_PlaceEditor> {
     text: widget.existing?.location,
   );
   String? error;
+  double? latitude;
+  double? longitude;
+  @override
+  void initState() {
+    super.initState();
+    latitude = widget.existing?.latitude;
+    longitude = widget.existing?.longitude;
+  }
+
+  Future<void> _chooseLocation({required bool current}) async {
+    final selected = await Navigator.of(context).push<SelectedLocation>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          useCurrentLocation: current,
+          initialLatitude: latitude,
+          initialLongitude: longitude,
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() {
+      latitude = selected.latitude;
+      longitude = selected.longitude;
+      location.text = selected.address ?? '';
+      error = null;
+    });
+  }
+
   @override
   void dispose() {
     name.dispose();
@@ -525,6 +681,21 @@ class _PlaceEditorState extends State<_PlaceEditor> {
             ),
           ),
           const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => _chooseLocation(current: true),
+            icon: const Icon(Icons.my_location),
+            label: const Text('현재 위치 사용'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _chooseLocation(current: false),
+            icon: const Icon(Icons.map_outlined),
+            label: const Text('지도에서 선택'),
+          ),
+          if (latitude != null && longitude != null)
+            Text(
+              '선택한 좌표: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}',
+            ),
+          const SizedBox(height: 16),
           TextField(
             controller: location,
             decoration: const InputDecoration(
@@ -534,7 +705,7 @@ class _PlaceEditorState extends State<_PlaceEditor> {
           ),
           const SizedBox(height: 12),
           const Text(
-            '시안에서는 입력한 글자만 임시로 보관해요. 지도·주소 검색과 좌표 저장은 연결되지 않았어요.',
+            '주소가 표시되지 않으면 직접 입력할 수 있어요. 지도 선택 없이 저장하면 좌표는 비어 있어요.',
             style: TextStyle(color: _Colors.muted),
           ),
           if (error != null)
@@ -551,7 +722,13 @@ class _PlaceEditorState extends State<_PlaceEditor> {
               }
               Navigator.pop(
                 context,
-                _Place(widget.id, name.text.trim(), location.text.trim()),
+                _Place(
+                  widget.id,
+                  name.text.trim(),
+                  location.text.trim(),
+                  latitude: latitude,
+                  longitude: longitude,
+                ),
               );
             },
             child: const Text('장소 저장'),

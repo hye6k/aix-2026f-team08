@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+abstract final class _ConceptColors {
+  static const background = Color(0xfff8f5ee);
+  static const surface = Color(0xfffffdf8);
+  static const forest = Color(0xff214d41);
+  static const text = Color(0xff20352e);
+  static const muted = Color(0xff596e65);
+  static const peach = Color(0xfff5dfd2);
+  static const peachText = Color(0xff704637);
+  static const outline = Color(0xffe8e6da);
+}
+
 /// 별도 플래그로 빌드한 디버그 APK에서만 접근하는 화면 비교 도구.
 class UxComparisonScreen extends StatelessWidget {
   const UxComparisonScreen({required this.existing, super.key});
@@ -72,7 +83,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
     margin: const EdgeInsets.only(bottom: 14),
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: _ConceptColors.surface,
+      border: Border.all(color: _ConceptColors.outline),
       borderRadius: BorderRadius.circular(22),
     ),
     child: Column(
@@ -93,7 +105,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
     child: Row(
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 20, color: const Color(0xff59766c)),
+          Icon(icon, size: 20, color: _ConceptColors.muted),
           const SizedBox(width: 10),
         ],
         Expanded(child: Text(title)),
@@ -123,7 +135,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
       const SizedBox(height: 10),
       const Text(
         '출발지와 도착할 곳, 도착 시간을 정해 주세요.',
-        style: TextStyle(color: Color(0xff61766d), height: 1.5),
+        style: TextStyle(color: _ConceptColors.muted, height: 1.5),
       ),
       const SizedBox(height: 24),
       _section(
@@ -148,7 +160,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
             const SizedBox(height: 12),
             const Text(
               '시안에서는 위치 검색이나 좌표가 저장되지 않아요.',
-              style: TextStyle(color: Color(0xff61766d), fontSize: 12),
+              style: TextStyle(color: _ConceptColors.muted, fontSize: 12),
             ),
           ],
         ),
@@ -185,7 +197,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
       const SizedBox(height: 14),
       const Text(
         '아직 데이터가 없는 첫날에는 예측 기준을 정해야 해요. 이 화면의 시간은 모두 예시입니다.',
-        style: TextStyle(color: Color(0xff61766d), height: 1.4),
+        style: TextStyle(color: _ConceptColors.muted, height: 1.4),
       ),
     ],
   );
@@ -207,13 +219,13 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
       const SizedBox(height: 8),
       Text(
         '${_destination.text} · ${_deadline.format(context)}까지',
-        style: const TextStyle(color: Color(0xff61766d)),
+        style: const TextStyle(color: _ConceptColors.muted),
       ),
       const SizedBox(height: 22),
       Container(
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          color: const Color(0xff254d43),
+          color: _ConceptColors.forest,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -308,7 +320,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
       const SizedBox(height: 8),
       const Text(
         '아래는 화면을 살펴보기 위한 예시예요.',
-        style: TextStyle(color: Color(0xff61766d)),
+        style: TextStyle(color: _ConceptColors.muted),
       ),
       const SizedBox(height: 22),
       _section(
@@ -334,14 +346,27 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
   @override
   Widget build(BuildContext context) => Theme(
     data: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff315e50)),
+      colorScheme: ColorScheme.fromSeed(seedColor: _ConceptColors.forest)
+          .copyWith(
+            primary: _ConceptColors.forest,
+            onPrimary: Colors.white,
+            surface: _ConceptColors.surface,
+            onSurface: _ConceptColors.text,
+            primaryContainer: const Color(0xffdcebe1),
+            onPrimaryContainer: _ConceptColors.forest,
+          ),
+      scaffoldBackgroundColor: _ConceptColors.background,
+      navigationBarTheme: const NavigationBarThemeData(
+        backgroundColor: _ConceptColors.surface,
+        indicatorColor: Color(0xffdcebe1),
+      ),
       useMaterial3: true,
       splashFactory: InkRipple.splashFactory,
     ),
     child: Scaffold(
-      backgroundColor: const Color(0xfff2f5ef),
+      backgroundColor: _ConceptColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xfff2f5ef),
+        backgroundColor: _ConceptColors.background,
         title: const Text('새 UX 시안'),
         actions: [
           if (_configured)
@@ -367,12 +392,15 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
                     vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xffffedc9),
+                    color: _ConceptColors.peach,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
                     '시안 · 모든 내용은 예시이며 저장·실제 알림 없음',
-                    style: TextStyle(fontSize: 12, color: Color(0xff745519)),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _ConceptColors.peachText,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 22),

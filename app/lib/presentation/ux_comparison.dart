@@ -106,6 +106,21 @@ class _Routine {
   final TimeOfDay? wake;
 }
 
+class _MockRecord {
+  const _MockRecord(
+    this.routine,
+    this.sleep,
+    this.wake,
+    this.departure,
+    this.arrival,
+  );
+  final _Routine routine;
+  final DateTime sleep;
+  final DateTime wake;
+  final DateTime departure;
+  final DateTime arrival;
+}
+
 const _days = ['월', '화', '수', '목', '금', '토', '일'];
 String _dayText(Set<int> days) => [
   for (var i = 1; i <= 7; i++)
@@ -141,6 +156,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   String? _storageError;
   Timer? _clockTimer;
   bool _mockActive = false;
+  String? _recordMonth;
   String _mockTodayStatus = 'pending';
   List<_Place>? _originalPlaces;
   List<_Routine>? _originalRoutines;
@@ -458,31 +474,53 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
       _originalNextId = _nextId;
     }
     final now = widget.now ?? DateTime.now();
-    final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final later = DateTime(now.year, now.month, now.day + 2);
     setState(() {
       _mockActive = true;
+      _recordMonth = null;
       _mockTodayStatus = 'pending';
       _places
         ..clear()
         ..addAll([
           _Place(0, '집', '예시 위치', latitude: 37.5, longitude: 127),
-          _Place(1, '회사', '예시 위치', latitude: 37.6, longitude: 127.1),
+          _Place(1, '학교', '예시 위치', latitude: 37.6, longitude: 127.1),
+          _Place(2, '실습실', '예시 위치', latitude: 37.59, longitude: 127.08),
+          _Place(3, '카페', '예시 위치', latitude: 37.57, longitude: 127.03),
         ]);
       _routines
         ..clear()
-        ..add(
+        ..addAll([
           _Routine(
-            2,
-            '출근',
+            4,
+            '오전 강의',
             0,
             1,
             const TimeOfDay(hour: 9, minute: 0),
-            rest ? {later.weekday} : {now.weekday, tomorrow.weekday},
+            rest ? {later.weekday} : {1, 3, 5},
             wake: const TimeOfDay(hour: 7, minute: 0),
           ),
-        );
-      _nextId = 3;
+          _Routine(
+            5,
+            '전공 실습',
+            0,
+            2,
+            const TimeOfDay(hour: 10, minute: 0),
+            rest
+                ? {DateTime(now.year, now.month, now.day + 3).weekday}
+                : {2, 4},
+            wake: const TimeOfDay(hour: 7, minute: 0),
+          ),
+          _Routine(
+            6,
+            '주말 아르바이트',
+            0,
+            3,
+            const TimeOfDay(hour: 11, minute: 0),
+            rest ? {DateTime(now.year, now.month, now.day + 4).weekday} : {6},
+            wake: const TimeOfDay(hour: 8, minute: 0),
+          ),
+        ]);
+      _nextId = 7;
       _tab = 0;
     });
   }
@@ -498,6 +536,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         ..addAll(_originalRoutines!);
       _nextId = _originalNextId!;
       _mockActive = false;
+      _recordMonth = null;
       _originalPlaces = null;
       _originalRoutines = null;
       _originalNextId = null;
@@ -628,36 +667,251 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
-  Widget _records() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const Text(
-        '나의 아침 기록',
-        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+  List<_MockRecord> _mockRecords() {
+    final now = widget.now ?? DateTime.now();
+    final records = <_MockRecord>[];
+    for (var offset = 1; offset <= 60; offset++) {
+      final day = DateTime(now.year, now.month, now.day - offset);
+      final routine = _routineOn(day);
+      if (routine == null) continue;
+      final deadline = DateTime(
+        day.year,
+        day.month,
+        day.day,
+        routine.deadline.hour,
+        routine.deadline.minute,
+      );
+      final arrival = deadline.subtract(Duration(minutes: 5 + offset % 8));
+      final departure = arrival.subtract(Duration(minutes: 28 + offset % 12));
+      final wake = departure.subtract(Duration(minutes: 42 + offset % 18));
+      final sleep = wake.subtract(Duration(minutes: 405 + offset % 65));
+      records.add(_MockRecord(routine, sleep, wake, departure, arrival));
+    }
+    return records;
+  }
+
+  String _time(DateTime time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  String _date(DateTime time) =>
+      '${time.year}년 ${time.month}월 ${time.day}일 · ${_days[time.weekday - 1]}요일';
+  String _duration(Duration value) => value.inHours > 0
+      ? '${value.inHours}시간 ${value.inMinutes % 60}분'
+      : '${value.inMinutes}분';
+
+  void _showMockRecord(_MockRecord record) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_date(record.arrival)} · ${record.routine.name}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('예시 기록', style: TextStyle(color: _Colors.muted)),
+              const SizedBox(height: 18),
+              Text('수면   ${_date(record.sleep)} ${_time(record.sleep)}'),
+              const SizedBox(height: 10),
+              Text('기상   ${_time(record.wake)}'),
+              const SizedBox(height: 10),
+              Text('출발   ${_time(record.departure)}'),
+              const SizedBox(height: 10),
+              Text('도착   ${_time(record.arrival)}'),
+              const SizedBox(height: 16),
+              const Text(
+                '수면은 시작과 기상 사이의 구간이며, 중간에 깬 시간은 반영하지 않았어요.',
+                style: TextStyle(color: _Colors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
       ),
-      const SizedBox(height: 22),
-      _card('아직 기록이 없어요', const [
-        Text(
-          '수면 → 기상 → 출발 → 도착으로 이어진 사이클이 이곳에 표시될 예정이에요.',
-          style: TextStyle(height: 1.5),
+    );
+  }
+
+  Widget _records() {
+    final records = _mockActive ? _mockRecords() : <_MockRecord>[];
+    final months = records
+        .map(
+          (r) =>
+              '${r.arrival.year}.${r.arrival.month.toString().padLeft(2, '0')}',
+        )
+        .toSet();
+    final visible = _recordMonth == null
+        ? records
+        : records
+              .where(
+                (r) =>
+                    '${r.arrival.year}.${r.arrival.month.toString().padLeft(2, '0')}' ==
+                    _recordMonth,
+              )
+              .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          '나의 아침 기록',
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
         ),
-      ]),
-      _card('기록 예시', const [
-        Text('예시 · 출근', style: TextStyle(color: _Colors.muted)),
-        SizedBox(height: 12),
-        Text('수면 구간   23:30 → 07:35'),
-        SizedBox(height: 8),
-        Text('준비 시간   50분'),
-        SizedBox(height: 8),
-        Text('이동 시간   35분'),
-        SizedBox(height: 12),
-        Text(
-          '가상 데이터이며 실제 수면 측정 결과가 아니에요.',
-          style: TextStyle(color: _Colors.muted, fontSize: 12),
+        const SizedBox(height: 8),
+        if (_mockActive)
+          Text(
+            '예시 데이터 · 최근 60일 · ${records.length}건',
+            style: const TextStyle(color: _Colors.muted),
+          ),
+        const SizedBox(height: 14),
+        if (!_mockActive)
+          _card('아직 기록이 없어요', const [
+            Text(
+              '수면 → 기상 → 출발 → 도착으로 이어진 사이클이 이곳에 표시될 예정이에요.',
+              style: TextStyle(height: 1.5),
+            ),
+          ])
+        else if (records.isEmpty)
+          _card('예시 기록이 없어요', const [Text('예시 루틴의 적용 요일을 확인해 주세요.')])
+        else ...[
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('전체'),
+                selected: _recordMonth == null,
+                onSelected: (_) => setState(() => _recordMonth = null),
+              ),
+              for (final month in months)
+                ChoiceChip(
+                  label: Text(month),
+                  selected: _recordMonth == month,
+                  onSelected: (_) => setState(() => _recordMonth = month),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              '일정이 없는 날은 기록에서 제외했어요.',
+              style: TextStyle(color: _Colors.muted, fontSize: 12),
+            ),
+          ),
+          for (final record in visible)
+            _card('${_date(record.arrival)} · ${record.routine.name}', [
+              Text(
+                '수면 구간 ${_duration(record.wake.difference(record.sleep))} · 준비 ${_duration(record.departure.difference(record.wake))} · 이동 ${_duration(record.arrival.difference(record.departure))}',
+                style: const TextStyle(height: 1.5),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _showMockRecord(record),
+                  child: const Text('자세히 보기'),
+                ),
+              ),
+            ]),
+        ],
+      ],
+    );
+  }
+
+  void _openDeveloper() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => Theme(
+          data: _conceptTheme(),
+          child: StatefulBuilder(
+            builder: (context, refresh) => Scaffold(
+              appBar: AppBar(title: const Text('개발자 옵션')),
+              body: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const Text(
+                    '예시 데이터',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '대학생의 루틴 3개와 최근 60일 예시 기록을 불러와요. 기존 데이터는 유지되고 예시는 앱을 종료하면 사라져요.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      _mockExample();
+                      Navigator.pop(routeContext);
+                    },
+                    child: const Text('대학생 예시 데이터 불러오기'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () {
+                      _mockExample(rest: true);
+                      Navigator.pop(routeContext);
+                    },
+                    child: const Text('오늘·내일 휴식 예시 보기'),
+                  ),
+                  if (_mockActive) ...[
+                    const SizedBox(height: 24),
+                    const Text(
+                      '오늘 루틴 상태 (예시)',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final entry in const [
+                          ('pending', '미완료'),
+                          ('completed', '완료'),
+                          ('failed', '실패'),
+                        ])
+                          ChoiceChip(
+                            label: Text(entry.$2),
+                            selected: _mockTodayStatus == entry.$1,
+                            onSelected: (_) {
+                              setState(() => _mockTodayStatus = entry.$1);
+                              refresh(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        _restoreOriginal();
+                        Navigator.pop(routeContext);
+                      },
+                      child: const Text('원래 데이터로 돌아가기'),
+                    ),
+                  ],
+                  if (widget.existing != null) ...[
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('기존 앱 화면 열기'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => widget.existing!,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ),
-      ]),
-    ],
-  );
+      ),
+    );
+  }
 
   Widget _manage() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -712,50 +966,12 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         ),
       ]),
       if (widget.developerOptions)
-        _card('개발자 옵션', [
-          const Text(
-            '예시 데이터는 실제 설정을 바꾸지 않아요.',
-            style: TextStyle(color: _Colors.muted, fontSize: 12),
-          ),
-          TextButton(
-            onPressed: () => _mockExample(),
-            child: const Text('예시 루틴 불러오기'),
-          ),
-          TextButton(
-            onPressed: () => _mockExample(rest: true),
-            child: const Text('오늘·내일 휴식 예시 보기'),
-          ),
-          if (_mockActive) ...[
-            const Text('오늘 루틴 상태 (예시)'),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final entry in const [
-                  ('pending', '미완료'),
-                  ('completed', '완료'),
-                  ('failed', '실패'),
-                ])
-                  ChoiceChip(
-                    label: Text(entry.$2),
-                    selected: _mockTodayStatus == entry.$1,
-                    onSelected: (_) =>
-                        setState(() => _mockTodayStatus = entry.$1),
-                  ),
-              ],
-            ),
-            TextButton(
-              onPressed: _restoreOriginal,
-              child: const Text('원래 데이터로 돌아가기'),
-            ),
-          ],
-          if (widget.existing != null)
-            TextButton(
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute<void>(builder: (_) => widget.existing!)),
-              child: const Text('기존 앱 화면 열기'),
-            ),
-        ]),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: const Text('개발자 옵션'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _openDeveloper,
+        ),
     ],
   );
 

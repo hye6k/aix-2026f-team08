@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -112,14 +113,15 @@ String _dayText(Set<int> days) => [
 
 /// 앱 제품 저장소와 분리된 UX 시안이다.
 class MorningConceptScreen extends StatefulWidget {
-  const MorningConceptScreen({super.key, this.today, this.persist = true});
-  final int? today;
+  const MorningConceptScreen({super.key, this.now, this.persist = true});
+  final DateTime? now;
   final bool persist;
   @override
   State<MorningConceptScreen> createState() => _MorningConceptScreenState();
 }
 
-class _MorningConceptScreenState extends State<MorningConceptScreen> {
+class _MorningConceptScreenState extends State<MorningConceptScreen>
+    with WidgetsBindingObserver {
   final _places = <_Place>[];
   final _routines = <_Routine>[];
   int _nextId = 0;
@@ -128,13 +130,32 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
   bool _loading = true;
   bool _saving = false;
   String? _storageError;
+  Timer? _clockTimer;
   late final Future<SharedPreferences> _preferences =
       SharedPreferences.getInstance();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.now == null) {
+      _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
     _load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -375,26 +396,66 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
     ],
   );
 
+  (_Routine, DateTime)? _nextRoutine(DateTime now) {
+    (_Routine, DateTime)? next;
+    for (var offset = 0; offset <= 7; offset++) {
+      final day = DateTime(now.year, now.month, now.day + offset);
+      for (final routine in _routines) {
+        if (!routine.days.contains(day.weekday)) continue;
+        final deadline = DateTime(
+          day.year,
+          day.month,
+          day.day,
+          routine.deadline.hour,
+          routine.deadline.minute,
+        );
+        if (!deadline.isAfter(now)) continue;
+        if (next == null || deadline.isBefore(next.$2)) {
+          next = (routine, deadline);
+        }
+      }
+    }
+    return next;
+  }
+
   Widget _today() {
-    final today = widget.today ?? DateTime.now().weekday;
-    final active = _routines.where((r) => r.days.contains(today)).firstOrNull;
+    final now = widget.now ?? DateTime.now();
+    final next = _nextRoutine(now);
+    final active = next?.$1;
+    final deadline = next?.$2;
+    final daysAway = deadline == null
+        ? 0
+        : DateTime.utc(
+            deadline.year,
+            deadline.month,
+            deadline.day,
+          ).difference(DateTime.utc(now.year, now.month, now.day)).inDays;
+    final when = deadline == null
+        ? ''
+        : '${daysAway == 0
+              ? '오늘'
+              : daysAway == 1
+              ? '내일'
+              : '${deadline.month}월 ${deadline.day}일'} · ${_days[deadline.weekday - 1]}요일';
+    final missingCoordinates =
+        active != null &&
+        _places
+            .where((p) => p.id == active.origin || p.id == active.destination)
+            .any((p) => p.latitude == null || p.longitude == null);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          '오늘의 아침',
+          '다가오는 아침',
           style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
-        Text(
-          '${_days[today - 1]}요일에 적용되는 루틴',
-          style: const TextStyle(color: _Colors.muted),
-        ),
+        const Text('다음으로 예정된 아침 루틴', style: TextStyle(color: _Colors.muted)),
         const SizedBox(height: 22),
         if (active == null)
-          _card('오늘 적용된 루틴이 없어요', [
+          _card('예정된 루틴이 없어요', [
             const Text(
-              '관리에서 아침 루틴을 만들고 요일을 선택해 보세요.',
+              '장소와 아침 루틴을 만들고 적용 요일을 선택해 주세요.',
               style: TextStyle(height: 1.5),
             ),
             Align(
@@ -416,7 +477,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '오늘의 루틴 · ${active.name}',
+                  '$when · ${active.name}',
                   style: const TextStyle(color: Color(0xffc2dccd)),
                 ),
                 const SizedBox(height: 14),
@@ -440,15 +501,29 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          if (missingCoordinates)
+            _card('장소 위치를 확인해 주세요', [
+              const Text(
+                '출발지나 도착지에 지도 좌표가 없어 나중에 자동 감지 기준으로 사용할 수 없어요.',
+                style: TextStyle(height: 1.5),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => setState(() => _tab = 2),
+                  child: const Text('장소 관리하기'),
+                ),
+              ),
+            ]),
           _card('아직 예측할 기록이 없어요', const [
             Text(
               '수면·기상·이동 기록이 쌓이면 필요한 시간을 안내할 수 있어요.',
               style: TextStyle(height: 1.5),
             ),
           ]),
-          _card('감지와 알림', const [
+          _card('예정 루틴 기준', const [
             Text(
-              '시안에서는 실제 이벤트를 수집하거나 알림을 예약하지 않아요.',
+              '현재 시안은 요일과 도착 마감 시각으로 다음 루틴을 찾아요. 실제 사이클의 진행·완료 여부와 자동 알림은 아직 연결되지 않았어요.',
               style: TextStyle(height: 1.5),
             ),
           ]),
@@ -594,7 +669,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen> {
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.wb_sunny_outlined),
-                  label: '오늘',
+                  label: '다가오는 아침',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.calendar_month_outlined),

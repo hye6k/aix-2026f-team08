@@ -25,7 +25,12 @@ void main() {
 
   testWidgets('장소 조합과 요일 배정, 오늘 적용 및 중복 방지', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: MorningConceptScreen(today: 1, persist: false)),
+      MaterialApp(
+        home: MorningConceptScreen(
+          now: DateTime(2026, 11, 9, 8),
+          persist: false,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     Future<void> tapText(String text) async {
@@ -62,8 +67,8 @@ void main() {
     await tapText('월');
     await tapText('루틴 저장');
     expect(find.text('출근'), findsOneWidget);
-    await tapText('오늘');
-    expect(find.text('오늘의 루틴 · 출근'), findsOneWidget);
+    await tapText('다가오는 아침');
+    expect(find.text('오늘 · 월요일 · 출근'), findsOneWidget);
     expect(find.text('집 → 회사'), findsOneWidget);
     expect(find.text('아직 예측할 기록이 없어요'), findsOneWidget);
     await tapText('관리');
@@ -106,14 +111,57 @@ void main() {
       }),
     });
     await tester.pumpWidget(
-      const MaterialApp(home: MorningConceptScreen(today: 1)),
+      MaterialApp(home: MorningConceptScreen(now: DateTime(2026, 11, 9, 8))),
     );
     await tester.pumpAndSettle();
-    expect(find.text('오늘의 루틴 · 출근'), findsOneWidget);
+    expect(find.text('오늘 · 월요일 · 출근'), findsOneWidget);
     await tester.tap(find.text('관리').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('집'));
     await tester.pumpAndSettle();
     expect(find.text('선택한 좌표: 37.100000, 127.100000'), findsOneWidget);
   });
+
+  for (final scenario in [
+    (DateTime(2026, 11, 9, 8, 59), '오늘 · 월요일 · 출근'),
+    (DateTime(2026, 11, 9, 9), '내일 · 화요일 · 출근'),
+    (DateTime(2026, 11, 13, 10), '11월 16일 · 월요일 · 출근'),
+    (DateTime(2026, 11, 15, 23), '내일 · 월요일 · 출근'),
+  ]) {
+    testWidgets('가까운 예정 루틴: ${scenario.$1}', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'ux_location_draft_v1': jsonEncode({
+          'nextId': 3,
+          'places': [
+            {'id': 0, 'name': '집', 'location': '주소', 'lat': null, 'lng': null},
+            {
+              'id': 1,
+              'name': '회사',
+              'location': '주소',
+              'lat': 37.2,
+              'lng': 127.2,
+            },
+          ],
+          'routines': [
+            {
+              'id': 2,
+              'name': '출근',
+              'origin': 0,
+              'destination': 1,
+              'hour': 9,
+              'minute': 0,
+              'days': [1, 2, 3, 4, 5],
+            },
+          ],
+        }),
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: MorningConceptScreen(now: scenario.$1)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(scenario.$2), findsOneWidget);
+      expect(find.text('장소 위치를 확인해 주세요'), findsOneWidget);
+      expect(find.text('아직 예측할 기록이 없어요'), findsOneWidget);
+    });
+  }
 }

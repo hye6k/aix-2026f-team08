@@ -920,12 +920,39 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         '아침 관리',
         style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
       ),
-      const SizedBox(height: 8),
-      const Text(
-        '장소를 저장하고 요일별 아침 루틴을 만들어 보세요.',
-        style: TextStyle(color: _Colors.muted),
+      const SizedBox(height: 16),
+      FilledButton.icon(
+        onPressed: _routineEditor,
+        icon: const Icon(Icons.add),
+        label: const Text('아침 루틴 만들기'),
       ),
-      const SizedBox(height: 22),
+      const SizedBox(height: 16),
+      _card('아침 루틴', [
+        if (_routines.isEmpty) const Text('만들어진 아침 루틴이 없어요.'),
+        for (final r in _routines)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.wb_twilight_outlined),
+            title: Text(r.name),
+            subtitle: Text(
+              '${_placeName(r.origin)} → ${_placeName(r.destination)}\n${r.deadline.format(context)} · ${_dayText(r.days)}',
+            ),
+            isThreeLine: true,
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _routineEditor(r),
+          ),
+      ]),
+    ],
+  );
+
+  Widget _settings() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        '설정',
+        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 16),
       _card('내 장소', [
         if (_places.isEmpty) const Text('아직 추가한 장소가 없어요.'),
         for (final p in _places)
@@ -942,27 +969,6 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           onPressed: _placeEditor,
           icon: const Icon(Icons.add),
           label: const Text('장소 추가'),
-        ),
-      ]),
-      _card('아침 루틴', [
-        if (_routines.isEmpty) const Text('만들어진 아침 루틴이 없어요.'),
-        for (final r in _routines)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.wb_twilight_outlined),
-            title: Text(r.name),
-            subtitle: Text(
-              '${_placeName(r.origin)} → ${_placeName(r.destination)}\n${r.deadline.format(context)} · ${_dayText(r.days)}',
-            ),
-            isThreeLine: true,
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _routineEditor(r),
-          ),
-        const SizedBox(height: 8),
-        FilledButton.icon(
-          onPressed: _routineEditor,
-          icon: const Icon(Icons.add),
-          label: const Text('아침 루틴 만들기'),
         ),
       ]),
       if (widget.developerOptions)
@@ -984,6 +990,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
             child: ListView(
+              key: ValueKey(_tab),
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: [
                 if (_loading)
@@ -996,8 +1003,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                   _today()
                 else if (_tab == 1)
                   _records()
+                else if (_tab == 2)
+                  _manage()
                 else
-                  _manage(),
+                  _settings(),
               ],
             ),
           ),
@@ -1016,7 +1025,11 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                   icon: Icon(Icons.calendar_month_outlined),
                   label: '기록',
                 ),
-                NavigationDestination(icon: Icon(Icons.tune), label: '관리'),
+                NavigationDestination(icon: Icon(Icons.list_alt), label: '관리'),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  label: '설정',
+                ),
               ],
             )
           : null,

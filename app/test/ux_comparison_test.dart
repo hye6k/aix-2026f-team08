@@ -9,13 +9,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  testWidgets('새 화면에서 시작하고 관리의 개발자 옵션에서 기존 화면을 연다', (tester) async {
+  testWidgets('새 화면에서 시작하고 설정의 개발자 옵션에서 기존 화면을 연다', (tester) async {
     await tester.pumpWidget(const MorningRoutineApp(compareUi: true));
     await tester.pumpAndSettle();
     expect(find.text('나의 아침을\n가볍게 준비해요'), findsOneWidget);
     expect(find.text('새 UX 시안 보기'), findsNothing);
     await tester.ensureVisible(find.text('시작하기'));
     await tester.tap(find.text('시작하기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('설정').last);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('개발자 옵션'));
     await tester.pumpAndSettle();
@@ -29,7 +31,7 @@ void main() {
     expect(find.text('개발자 옵션'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('아침 관리'), findsOneWidget);
+    expect(find.text('내 장소'), findsOneWidget);
   });
 
   testWidgets('장소 조합과 요일 배정, 오늘 적용 및 중복 방지', (tester) async {
@@ -68,7 +70,10 @@ void main() {
     }
 
     await tapText('시작하기');
+    expect(find.text('내 장소'), findsNothing);
+    await tapText('설정');
     await addPlace('집', '주소 1');
+    await tapText('관리');
     await tapText('아침 루틴 만들기');
     await addPlace('회사', '주소 2', button: '새 장소 추가');
     await tester.enterText(find.widgetWithText(TextField, '루틴 이름'), '출근');
@@ -128,7 +133,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('오늘 · 월요일'), findsOneWidget);
-    await tester.tap(find.text('관리').last);
+    await tester.tap(find.text('설정').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('집'));
     await tester.pumpAndSettle();
@@ -173,7 +178,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await tapVisible('관리');
+    await tapVisible('설정');
     await tapVisible('개발자 옵션');
     await tapVisible('대학생 예시 데이터 불러오기');
     expect(find.text('오늘 · 월요일'), findsOneWidget);
@@ -194,7 +199,7 @@ void main() {
     expect(find.text('예시 기록'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    await tapVisible('관리');
+    await tapVisible('설정');
     await tapVisible('개발자 옵션');
     await tapVisible('완료');
     await tester.binding.handlePopRoute();
@@ -202,14 +207,14 @@ void main() {
     await tapVisible('홈');
     expect(find.text('내일 · 화요일'), findsOneWidget);
     expect(find.text('지금 잠들면 기상 시각까지 21시간 0분 남아요.'), findsOneWidget);
-    await tapVisible('관리');
+    await tapVisible('설정');
     await tapVisible('개발자 옵션');
     await tapVisible('실패');
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     await tapVisible('홈');
     expect(find.text('내일 · 화요일'), findsOneWidget);
-    await tapVisible('관리');
+    await tapVisible('설정');
     await tapVisible('개발자 옵션');
     await tapVisible('원래 데이터로 돌아가기');
     expect(

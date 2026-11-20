@@ -1092,13 +1092,16 @@ class _PlaceEditorState extends State<_PlaceEditor> {
           const SizedBox(height: 16),
           const Text('주소'),
           const SizedBox(height: 4),
-          Text(
-            address.isNotEmpty
-                ? address
-                : latitude == null
-                ? '위치를 선택해 주세요.'
-                : '주소를 확인할 수 없어요.',
+          InputDecorator(
+            isEmpty: address.isEmpty,
+            decoration: const InputDecoration(border: OutlineInputBorder()),
+            child: Text(address),
           ),
+          if (latitude != null && address.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('주소를 확인할 수 없어요.'),
+            ),
           const SizedBox(height: 16),
           TextField(
             controller: name,

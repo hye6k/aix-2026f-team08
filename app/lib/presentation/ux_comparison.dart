@@ -1207,26 +1207,110 @@ class _RoutineEditorState extends State<_RoutineEditor> {
     const addPlace = -1;
     final choice = await showModalBottomSheet<int>(
       context: context,
-      showDragHandle: true,
+      isScrollControlled: true,
       useSafeArea: true,
+      backgroundColor: _Colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(title: Text('$label 선택')),
-            for (final place in widget.places)
-              ListTile(
-                title: Text(place.name),
-                subtitle: place.location.isEmpty ? null : Text(place.location),
-                trailing: place.id == current ? const Icon(Icons.check) : null,
-                onTap: () => Navigator.pop(sheetContext, place.id),
-              ),
-            ListTile(
-              leading: const Icon(Icons.add_location_alt_outlined),
-              title: const Text('새 장소 추가'),
-              onTap: () => Navigator.pop(sheetContext, addPlace),
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$label 선택',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: _Colors.text,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '닫기',
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                if (widget.places.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      '저장된 장소가 없어요.',
+                      style: TextStyle(color: _Colors.muted),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: widget.places.length,
+                      separatorBuilder: (_, _) =>
+                          const Divider(height: 1, color: _Colors.outline),
+                      itemBuilder: (_, index) {
+                        final place = widget.places[index];
+                        final selected = place.id == current;
+                        final showAddress =
+                            place.location.isNotEmpty &&
+                            place.location != '예시 위치';
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          selected: selected,
+                          selectedTileColor: const Color(0xffe4efe8),
+                          selectedColor: _Colors.forest,
+                          title: Text(
+                            place.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: showAddress
+                              ? Text(
+                                  place.location,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: _Colors.muted),
+                                )
+                              : null,
+                          trailing: selected ? const Icon(Icons.check) : null,
+                          onTap: () => Navigator.pop(sheetContext, place.id),
+                        );
+                      },
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                const Divider(height: 1, color: _Colors.outline),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(sheetContext, addPlace),
+                  icon: const Icon(Icons.add),
+                  label: const Text('새 장소 추가'),
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    minimumSize: const Size(0, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

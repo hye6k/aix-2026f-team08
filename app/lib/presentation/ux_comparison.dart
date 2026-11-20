@@ -471,6 +471,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     });
   }
 
+  static const _mockLimit = 20;
+  int _mockPlaceCount = 4;
+  int _mockRoutineCount = 3;
+
   void _mockExample({bool rest = false}) {
     if (!_mockActive) {
       _originalPlaces = [..._places];
@@ -483,48 +487,112 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
       _mockActive = true;
       _recordMonth = null;
       _mockTodayStatus = 'pending';
+      final places = <_Place>[
+        _Place(0, '집', '예시 위치', latitude: 37.5, longitude: 127),
+        _Place(1, '학교', '예시 위치', latitude: 37.6, longitude: 127.1),
+        _Place(2, '실습실', '예시 위치', latitude: 37.59, longitude: 127.08),
+        _Place(3, '카페', '예시 위치', latitude: 37.57, longitude: 127.03),
+        for (var i = 0; i < 16; i++)
+          _Place(
+            i + 4,
+            const [
+              '도서관',
+              '학생회관',
+              '체육관',
+              '기숙사',
+              '스터디룸',
+              '연구실',
+              '미술관',
+              '서점',
+              '시청',
+              '공연장',
+              '수영장',
+              '공방',
+              '지하철역',
+              '버스터미널',
+              '공원',
+              '봉사센터',
+            ][i],
+            '예시 위치',
+            latitude: 37.51 + i * 0.004,
+            longitude: 127.01 + i * 0.005,
+          ),
+      ].take(_mockPlaceCount).toList();
+      final routines = <_Routine>[
+        _Routine(
+          20,
+          '오전 강의',
+          0,
+          1,
+          const TimeOfDay(hour: 9, minute: 0),
+          rest ? {later.weekday} : {1, 3, 5},
+          wake: const TimeOfDay(hour: 7, minute: 0),
+        ),
+        _Routine(
+          21,
+          '전공 실습',
+          0,
+          2,
+          const TimeOfDay(hour: 10, minute: 0),
+          rest ? {DateTime(now.year, now.month, now.day + 3).weekday} : {2, 4},
+          wake: const TimeOfDay(hour: 7, minute: 0),
+        ),
+        _Routine(
+          22,
+          '주말 아르바이트',
+          0,
+          3,
+          const TimeOfDay(hour: 11, minute: 0),
+          rest ? {DateTime(now.year, now.month, now.day + 4).weekday} : {6},
+          wake: const TimeOfDay(hour: 8, minute: 0),
+        ),
+        for (var i = 3; i < _mockLimit; i++)
+          _Routine(
+            20 + i,
+            const [
+              '도서관 공부',
+              '동아리 모임',
+              '아침 운동',
+              '기숙사 방문',
+              '조별 과제',
+              '연구 미팅',
+              '전시 관람',
+              '교재 구매',
+              '시청 방문',
+              '공연 리허설',
+              '수영 강습',
+              '공방 수업',
+              '지하철 환승',
+              '시외버스 탑승',
+              '공원 산책',
+              '봉사 활동',
+              '오후 강의',
+            ][i - 3],
+            0,
+            1 + i % (_mockLimit - 1),
+            const TimeOfDay(hour: 9, minute: 0),
+            {},
+          ),
+      ];
       _places
         ..clear()
-        ..addAll([
-          _Place(0, '집', '예시 위치', latitude: 37.5, longitude: 127),
-          _Place(1, '학교', '예시 위치', latitude: 37.6, longitude: 127.1),
-          _Place(2, '실습실', '예시 위치', latitude: 37.59, longitude: 127.08),
-          _Place(3, '카페', '예시 위치', latitude: 37.57, longitude: 127.03),
-        ]);
+        ..addAll(places);
       _routines
         ..clear()
         ..addAll([
-          _Routine(
-            4,
-            '오전 강의',
-            0,
-            1,
-            const TimeOfDay(hour: 9, minute: 0),
-            rest ? {later.weekday} : {1, 3, 5},
-            wake: const TimeOfDay(hour: 7, minute: 0),
-          ),
-          _Routine(
-            5,
-            '전공 실습',
-            0,
-            2,
-            const TimeOfDay(hour: 10, minute: 0),
-            rest
-                ? {DateTime(now.year, now.month, now.day + 3).weekday}
-                : {2, 4},
-            wake: const TimeOfDay(hour: 7, minute: 0),
-          ),
-          _Routine(
-            6,
-            '주말 아르바이트',
-            0,
-            3,
-            const TimeOfDay(hour: 11, minute: 0),
-            rest ? {DateTime(now.year, now.month, now.day + 4).weekday} : {6},
-            wake: const TimeOfDay(hour: 8, minute: 0),
-          ),
+          if (places.length >= 2)
+            for (final routine in routines.take(_mockRoutineCount))
+              _Routine(
+                routine.id,
+                routine.name,
+                routine.origin,
+                1 + (routine.destination - 1) % (places.length - 1),
+                routine.deadline,
+                routine.days,
+                wake: routine.wake,
+              ),
         ]);
-      _nextId = 7;
+      _nextId = _mockLimit * 2;
       _tab = 0;
     });
   }
@@ -843,10 +911,34 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    '대학생의 루틴 3개와 최근 60일 예시 기록을 불러와요. 기존 데이터는 유지되고 예시는 앱을 종료하면 사라져요.',
+                    '선택한 개수만큼 목록 앞에서부터 불러와요. 첫 세 루틴에 예시 일정과 기록이 있고, 나머지는 일정 미설정으로 표시돼요.',
                     style: TextStyle(height: 1.5),
                   ),
                   const SizedBox(height: 16),
+                  Text('장소 $_mockPlaceCount개'),
+                  Slider(
+                    value: _mockPlaceCount.toDouble(),
+                    max: _mockLimit.toDouble(),
+                    divisions: _mockLimit,
+                    label: '$_mockPlaceCount개',
+                    onChanged: (value) => refresh(() {
+                      _mockPlaceCount = value.round();
+                      if (_mockPlaceCount < 2) _mockRoutineCount = 0;
+                    }),
+                  ),
+                  Text('루틴 $_mockRoutineCount개'),
+                  Slider(
+                    value: _mockRoutineCount.toDouble(),
+                    max: _mockLimit.toDouble(),
+                    divisions: _mockLimit,
+                    label: '$_mockRoutineCount개',
+                    onChanged: _mockPlaceCount < 2
+                        ? null
+                        : (value) =>
+                              refresh(() => _mockRoutineCount = value.round()),
+                  ),
+                  if (_mockPlaceCount < 2)
+                    const Text('루틴을 불러오려면 장소가 2개 이상 필요해요.'),
                   FilledButton(
                     onPressed: () {
                       _mockExample();

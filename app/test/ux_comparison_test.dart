@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morning_routine/app/app.dart';
+import 'package:morning_routine/presentation/location_picker.dart';
 import 'package:morning_routine/presentation/ux_comparison.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -58,10 +59,11 @@ void main() {
     }) async {
       await tapText(button);
       await tester.enterText(find.widgetWithText(TextField, '장소 이름'), name);
-      await tester.enterText(
-        find.widgetWithText(TextField, '위치 설명 또는 주소'),
-        address,
-      );
+      await tapText('지도에서 선택');
+      final picker = tester.element(find.byType(LocationPickerScreen));
+      Navigator.of(picker).pop(SelectedLocation(37.5, 127.0, address));
+      await tester.pumpAndSettle();
+      expect(find.text(address), findsOneWidget);
       await tapText('장소 저장');
     }
 
@@ -130,7 +132,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('집'));
     await tester.pumpAndSettle();
-    expect(find.text('선택한 좌표: 37.100000, 127.100000'), findsOneWidget);
+    expect(find.text('집 주소'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
   });
 
   testWidgets('예시 데이터의 완료·실패는 내일로 전환하고 원본은 보존한다', (tester) async {

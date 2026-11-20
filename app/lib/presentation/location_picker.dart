@@ -126,7 +126,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         if (parts.isNotEmpty) address = parts.join(' ');
       }
     } catch (_) {
-      /* 주소 없이도 좌표를 선택하고 사용자가 직접 입력할 수 있다. */
+      // 주소 조회에 실패해도 선택한 위치는 보존한다.
     }
     if (!mounted) return;
     Navigator.pop(
@@ -209,10 +209,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_selected != null)
-                  Text(
-                    '선택한 좌표 ${_selected!.latitude.toStringAsFixed(5)}, ${_selected!.longitude.toStringAsFixed(5)}',
-                  ),
                 if (_message != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),

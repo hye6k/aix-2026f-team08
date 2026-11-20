@@ -933,7 +933,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.place_outlined),
             title: Text(p.name),
-            subtitle: Text(p.location),
+            subtitle: Text(p.location.isEmpty ? '주소 확인 불가' : p.location),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _placeEditor(p),
           ),
@@ -1036,9 +1036,7 @@ class _PlaceEditorState extends State<_PlaceEditor> {
   late final TextEditingController name = TextEditingController(
     text: widget.existing?.name,
   );
-  late final TextEditingController location = TextEditingController(
-    text: widget.existing?.location,
-  );
+  late String address = widget.existing?.location ?? '';
   String? error;
   double? latitude;
   double? longitude;
@@ -1063,7 +1061,7 @@ class _PlaceEditorState extends State<_PlaceEditor> {
     setState(() {
       latitude = selected.latitude;
       longitude = selected.longitude;
-      location.text = selected.address ?? '';
+      address = selected.address ?? '';
       error = null;
     });
   }
@@ -1071,7 +1069,6 @@ class _PlaceEditorState extends State<_PlaceEditor> {
   @override
   void dispose() {
     name.dispose();
-    location.dispose();
     super.dispose();
   }
 
@@ -1082,13 +1079,6 @@ class _PlaceEditorState extends State<_PlaceEditor> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Text(
-            '자주 사용하는 장소',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 12),
-          const Text('집이나 회사처럼 알아보기 쉬운 이름을 붙여 주세요.'),
-          const SizedBox(height: 24),
           TextField(
             controller: name,
             decoration: const InputDecoration(
@@ -1107,22 +1097,15 @@ class _PlaceEditorState extends State<_PlaceEditor> {
             icon: const Icon(Icons.map_outlined),
             label: const Text('지도에서 선택'),
           ),
-          if (latitude != null && longitude != null)
-            Text(
-              '선택한 좌표: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}',
-            ),
           const SizedBox(height: 16),
-          TextField(
-            controller: location,
-            decoration: const InputDecoration(
-              labelText: '위치 설명 또는 주소',
-              hintText: '예: 서울시 ...',
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            '주소가 표시되지 않으면 직접 입력할 수 있어요. 지도 선택 없이 저장하면 좌표는 비어 있어요.',
-            style: TextStyle(color: _Colors.muted),
+          const Text('주소'),
+          const SizedBox(height: 4),
+          Text(
+            address.isNotEmpty
+                ? address
+                : latitude == null
+                ? '위치를 선택해 주세요.'
+                : '주소를 확인할 수 없어요.',
           ),
           if (error != null)
             Padding(
@@ -1132,8 +1115,12 @@ class _PlaceEditorState extends State<_PlaceEditor> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: () {
-              if (name.text.trim().isEmpty || location.text.trim().isEmpty) {
-                setState(() => error = '장소 이름과 위치를 입력해 주세요.');
+              if (name.text.trim().isEmpty) {
+                setState(() => error = '장소 이름을 입력해 주세요.');
+                return;
+              }
+              if ((latitude == null || longitude == null) && address.isEmpty) {
+                setState(() => error = '위치를 선택해 주세요.');
                 return;
               }
               Navigator.pop(
@@ -1141,7 +1128,7 @@ class _PlaceEditorState extends State<_PlaceEditor> {
                 _Place(
                   widget.id,
                   name.text.trim(),
-                  location.text.trim(),
+                  address,
                   latitude: latitude,
                   longitude: longitude,
                 ),

@@ -1201,6 +1201,78 @@ class _RoutineEditorState extends State<_RoutineEditor> {
     super.dispose();
   }
 
+  Future<void> _pickPlace({required bool isOrigin}) async {
+    final label = isOrigin ? '출발지' : '도착지';
+    final current = isOrigin ? origin : destination;
+    const addPlace = -1;
+    final choice = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(title: Text('$label 선택')),
+            for (final place in widget.places)
+              ListTile(
+                title: Text(place.name),
+                subtitle: place.location.isEmpty ? null : Text(place.location),
+                trailing: place.id == current ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(sheetContext, place.id),
+              ),
+            ListTile(
+              leading: const Icon(Icons.add_location_alt_outlined),
+              title: const Text('새 장소 추가'),
+              onTap: () => Navigator.pop(sheetContext, addPlace),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    var selected = choice;
+    if (choice == addPlace) {
+      final previousIds = widget.places.map((place) => place.id).toSet();
+      await widget.addPlace();
+      if (!mounted) return;
+      final added = widget.places
+          .where((place) => !previousIds.contains(place.id))
+          .firstOrNull;
+      if (added == null) return;
+      selected = added.id;
+    }
+    setState(() {
+      if (isOrigin) {
+        origin = selected;
+      } else {
+        destination = selected;
+      }
+      error = null;
+    });
+  }
+
+  Widget _placeField(String label, int? id, {required bool isOrigin}) {
+    final place = widget.places.where((place) => place.id == id).firstOrNull;
+    return OutlinedButton(
+      onPressed: () => _pickPlace(isOrigin: isOrigin),
+      child: Row(
+        children: [
+          Text(label),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              place?.name ?? '선택',
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Icon(Icons.expand_more),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final conflicts = <int, String>{
@@ -1235,36 +1307,9 @@ class _RoutineEditorState extends State<_RoutineEditor> {
                 ),
               ),
               const SizedBox(height: 20),
-              DropdownButtonFormField<int>(
-                initialValue: origin,
-                decoration: const InputDecoration(labelText: '출발지'),
-                items: [
-                  for (final p in widget.places)
-                    DropdownMenuItem(value: p.id, child: Text(p.name)),
-                ],
-                onChanged: (value) => setState(() => origin = value),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                initialValue: destination,
-                decoration: const InputDecoration(labelText: '도착지'),
-                items: [
-                  for (final p in widget.places)
-                    DropdownMenuItem(value: p.id, child: Text(p.name)),
-                ],
-                onChanged: (value) => setState(() => destination = value),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () async {
-                    await widget.addPlace();
-                    if (mounted) setState(() {});
-                  },
-                  icon: const Icon(Icons.add_location_alt_outlined),
-                  label: const Text('새 장소 추가'),
-                ),
-              ),
+              _placeField('출발지', origin, isOrigin: true),
+              const SizedBox(height: 8),
+              _placeField('도착지', destination, isOrigin: false),
               const SizedBox(height: 16),
             ] else ...[
               Text(widget.existing!.name),

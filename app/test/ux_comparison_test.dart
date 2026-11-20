@@ -75,12 +75,12 @@ void main() {
     await addPlace('집', '주소 1');
     await tapText('관리');
     await tapText('아침 루틴 만들기');
-    await addPlace('회사', '주소 2', button: '새 장소 추가');
     await tester.enterText(find.widgetWithText(TextField, '루틴 이름'), '출근');
     await tapText('출발지');
     await tapText('집');
     await tapText('도착지');
-    await tapText('회사');
+    await addPlace('회사', '주소 2', button: '새 장소 추가');
+    expect(find.text('회사'), findsOneWidget);
     expect(find.text('도착 마감 시각'), findsNothing);
     await tapText('루틴 저장');
     expect(find.textContaining('일정 미설정'), findsOneWidget);

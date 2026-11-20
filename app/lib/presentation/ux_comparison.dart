@@ -1097,6 +1097,22 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
+  void _showPendingSetting(String title, String description) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text('$description\n\n아직 사용할 수 없어요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _settings() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -1111,6 +1127,17 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         trailing: const Icon(Icons.chevron_right),
         onTap: _openPlaces,
       ),
+      for (final (icon, title, description) in const [
+        (Icons.notifications_outlined, '알림', '취침 안내와 출발 알림을 관리해요.'),
+        (Icons.bedtime_outlined, '수면 목표', '목표 수면 시간을 설정해요.'),
+        (Icons.location_searching, '권한 및 감지 상태', '알림과 위치 권한, 자동 감지 상태를 확인해요.'),
+      ])
+        ListTile(
+          leading: Icon(icon),
+          title: Text(title),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showPendingSetting(title, description),
+        ),
       if (widget.developerOptions)
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 4),

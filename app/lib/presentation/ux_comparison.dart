@@ -318,13 +318,17 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     });
   }
 
-  Future<void> _routineEditor([_Routine? existing]) async {
+  Future<void> _routineEditor({
+    _Routine? existing,
+    bool schedule = false,
+  }) async {
     final result = await Navigator.of(context).push<_Routine>(
       MaterialPageRoute(
         builder: (_) => Theme(
           data: _conceptTheme(),
           child: _RoutineEditor(
             existing: existing,
+            schedule: schedule,
             id: existing?.id ?? _nextId++,
             places: _places,
             routines: _routines,
@@ -935,11 +939,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             leading: const Icon(Icons.wb_twilight_outlined),
             title: Text(r.name),
             subtitle: Text(
-              '${_placeName(r.origin)} → ${_placeName(r.destination)}\n${r.deadline.format(context)} · ${_dayText(r.days)}',
+              '${_placeName(r.origin)} → ${_placeName(r.destination)}\n${r.days.isEmpty ? '일정 미설정' : '${r.deadline.format(context)} · ${_dayText(r.days)}'}',
             ),
             isThreeLine: true,
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _routineEditor(r),
+            onTap: () => _routineEditor(existing: r),
+            trailing: TextButton(
+              onPressed: () => _routineEditor(existing: r, schedule: true),
+              child: const Text('일정 설정'),
+            ),
           ),
       ]),
     ],
@@ -1165,12 +1172,14 @@ class _RoutineEditor extends StatefulWidget {
     required this.routines,
     required this.addPlace,
     this.existing,
+    required this.schedule,
   });
   final int id;
   final List<_Place> places;
   final List<_Routine> routines;
   final Future<void> Function() addPlace;
   final _Routine? existing;
+  final bool schedule;
   @override
   State<_RoutineEditor> createState() => _RoutineEditorState();
 }
@@ -1200,145 +1209,155 @@ class _RoutineEditorState extends State<_RoutineEditor> {
     };
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existing == null ? '아침 루틴 만들기' : '아침 루틴 수정'),
+        title: Text(
+          widget.schedule
+              ? '일정 설정'
+              : widget.existing == null
+              ? '아침 루틴 만들기'
+              : '아침 루틴 수정',
+        ),
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text(
-              '어떤 아침을 준비할까요?',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(
-                labelText: '루틴 이름',
-                hintText: '예: 출근',
+            if (!widget.schedule) ...[
+              const Text(
+                '어떤 아침을 준비할까요?',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
               ),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<int>(
-              initialValue: origin,
-              decoration: const InputDecoration(labelText: '출발지'),
-              items: [
-                for (final p in widget.places)
-                  DropdownMenuItem(value: p.id, child: Text(p.name)),
-              ],
-              onChanged: (value) => setState(() => origin = value),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<int>(
-              initialValue: destination,
-              decoration: const InputDecoration(labelText: '도착지'),
-              items: [
-                for (final p in widget.places)
-                  DropdownMenuItem(value: p.id, child: Text(p.name)),
-              ],
-              onChanged: (value) => setState(() => destination = value),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () async {
-                  await widget.addPlace();
-                  if (mounted) setState(() {});
-                },
-                icon: const Icon(Icons.add_location_alt_outlined),
-                label: const Text('새 장소 추가'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('도착 마감 시각'),
-              trailing: TextButton(
-                onPressed: () async {
-                  final value = await showTimePicker(
-                    context: context,
-                    initialTime: deadline,
-                  );
-                  if (value != null && mounted) {
-                    setState(() => deadline = value);
-                  }
-                },
-                child: Text(deadline.format(context)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('기상 시각 (선택)'),
-              subtitle: const Text('홈에서도 설정할 수 있어요.'),
-              trailing: TextButton(
-                onPressed: () async {
-                  final value = await showTimePicker(
-                    context: context,
-                    initialTime: wake ?? const TimeOfDay(hour: 7, minute: 0),
-                  );
-                  if (value != null && mounted) {
-                    setState(() => wake = value);
-                  }
-                },
-                child: Text(wake?.format(context) ?? '시간 정하기'),
-              ),
-            ),
-            if (wake != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => setState(() => wake = null),
-                  child: const Text('기상 시각 지우기'),
+              const SizedBox(height: 20),
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(
+                  labelText: '루틴 이름',
+                  hintText: '예: 출근',
                 ),
               ),
-            const SizedBox(height: 16),
-            const Text(
-              '어느 요일에 적용할까요?',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '같은 요일에는 하나의 루틴만 적용할 수 있어요.',
-              style: TextStyle(color: _Colors.muted),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              children: [
-                for (var i = 1; i <= 7; i++)
-                  FilterChip(
-                    label: Text(_days[i - 1]),
-                    selected: days.contains(i),
-                    onSelected: (selected) {
-                      if (selected && conflicts.containsKey(i)) {
-                        setState(
-                          () => error =
-                              '${_days[i - 1]}요일은 ‘${conflicts[i]}’ 루틴에 적용 중이에요.',
-                        );
-                        return;
-                      }
-                      setState(() {
-                        if (selected) {
-                          days.add(i);
-                        } else {
-                          days.remove(i);
-                        }
-                        error = null;
-                      });
-                    },
-                  ),
-              ],
-            ),
-            if (conflicts.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                [
-                  for (final i in conflicts.keys.toList()..sort())
-                    '${_days[i - 1]}: ${conflicts[i]}',
-                ].join(' · '),
-                style: const TextStyle(color: _Colors.muted, fontSize: 12),
+              const SizedBox(height: 20),
+              DropdownButtonFormField<int>(
+                initialValue: origin,
+                decoration: const InputDecoration(labelText: '출발지'),
+                items: [
+                  for (final p in widget.places)
+                    DropdownMenuItem(value: p.id, child: Text(p.name)),
+                ],
+                onChanged: (value) => setState(() => origin = value),
               ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                initialValue: destination,
+                decoration: const InputDecoration(labelText: '도착지'),
+                items: [
+                  for (final p in widget.places)
+                    DropdownMenuItem(value: p.id, child: Text(p.name)),
+                ],
+                onChanged: (value) => setState(() => destination = value),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    await widget.addPlace();
+                    if (mounted) setState(() {});
+                  },
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                  label: const Text('새 장소 추가'),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              Text(widget.existing!.name),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('도착 마감 시각'),
+                trailing: TextButton(
+                  onPressed: () async {
+                    final value = await showTimePicker(
+                      context: context,
+                      initialTime: deadline,
+                    );
+                    if (value != null && mounted) {
+                      setState(() => deadline = value);
+                    }
+                  },
+                  child: Text(deadline.format(context)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('기상 시각 (선택)'),
+                subtitle: const Text('홈에서도 설정할 수 있어요.'),
+                trailing: TextButton(
+                  onPressed: () async {
+                    final value = await showTimePicker(
+                      context: context,
+                      initialTime: wake ?? const TimeOfDay(hour: 7, minute: 0),
+                    );
+                    if (value != null && mounted) {
+                      setState(() => wake = value);
+                    }
+                  },
+                  child: Text(wake?.format(context) ?? '시간 정하기'),
+                ),
+              ),
+              if (wake != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => setState(() => wake = null),
+                    child: const Text('기상 시각 지우기'),
+                  ),
+                ),
+              const SizedBox(height: 16),
+              const Text(
+                '어느 요일에 적용할까요?',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '같은 요일에는 하나의 루틴만 적용할 수 있어요.',
+                style: TextStyle(color: _Colors.muted),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (var i = 1; i <= 7; i++)
+                    FilterChip(
+                      label: Text(_days[i - 1]),
+                      selected: days.contains(i),
+                      onSelected: (selected) {
+                        if (selected && conflicts.containsKey(i)) {
+                          setState(
+                            () => error =
+                                '${_days[i - 1]}요일은 ‘${conflicts[i]}’ 루틴에 적용 중이에요.',
+                          );
+                          return;
+                        }
+                        setState(() {
+                          if (selected) {
+                            days.add(i);
+                          } else {
+                            days.remove(i);
+                          }
+                          error = null;
+                        });
+                      },
+                    ),
+                ],
+              ),
+              if (conflicts.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  [
+                    for (final i in conflicts.keys.toList()..sort())
+                      '${_days[i - 1]}: ${conflicts[i]}',
+                  ].join(' · '),
+                  style: const TextStyle(color: _Colors.muted, fontSize: 12),
+                ),
+              ],
             ],
             if (error != null)
               Padding(
@@ -1350,9 +1369,8 @@ class _RoutineEditorState extends State<_RoutineEditor> {
               onPressed: () {
                 if (name.text.trim().isEmpty ||
                     origin == null ||
-                    destination == null ||
-                    days.isEmpty) {
-                  setState(() => error = '이름, 출발지, 도착지와 적용 요일을 모두 선택해 주세요.');
+                    destination == null) {
+                  setState(() => error = '이름, 출발지, 도착지를 모두 입력해 주세요.');
                   return;
                 }
                 if (origin == destination) {
@@ -1372,7 +1390,7 @@ class _RoutineEditorState extends State<_RoutineEditor> {
                   ),
                 );
               },
-              child: const Text('루틴 저장'),
+              child: Text(widget.schedule ? '일정 저장' : '루틴 저장'),
             ),
           ],
         ),

@@ -81,8 +81,12 @@ void main() {
     await tapText('집');
     await tapText('도착지');
     await tapText('회사');
-    await tapText('월');
+    expect(find.text('도착 마감 시각'), findsNothing);
     await tapText('루틴 저장');
+    expect(find.textContaining('일정 미설정'), findsOneWidget);
+    await tapText('일정 설정');
+    await tapText('월');
+    await tapText('일정 저장');
     expect(find.text('출근'), findsOneWidget);
     await tapText('홈');
     expect(find.text('오늘 · 월요일'), findsOneWidget);
@@ -91,6 +95,13 @@ void main() {
     expect(find.text('기상 시간 정하기'), findsOneWidget);
     await tapText('관리');
     await tapText('아침 루틴 만들기');
+    await tester.enterText(find.widgetWithText(TextField, '루틴 이름'), '다른 루틴');
+    await tapText('출발지');
+    await tapText('집');
+    await tapText('도착지');
+    await tapText('회사');
+    await tapText('루틴 저장');
+    await tapText('일정 설정');
     await tapText('월');
     expect(find.text('월요일은 ‘출근’ 루틴에 적용 중이에요.'), findsOneWidget);
   });

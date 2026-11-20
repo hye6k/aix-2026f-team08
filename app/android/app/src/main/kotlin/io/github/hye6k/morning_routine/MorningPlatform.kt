@@ -13,6 +13,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
@@ -279,6 +284,36 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         lastSummary = summary
     }
 
+    private fun bedtimeArtwork(compact: Boolean): Bitmap {
+        val width = if (compact) 128 else 800
+        val height = if (compact) 128 else 280
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val background = Color.rgb(27, 37, 66)
+        canvas.drawColor(background)
+        val x = if (compact) 57f else 649f
+        val y = if (compact) 68f else 152f
+        val radius = if (compact) 35f else 78f
+        paint.color = Color.rgb(255, 220, 140)
+        canvas.drawCircle(x, y, radius, paint)
+        paint.color = background
+        canvas.drawCircle(x + radius * 0.46f, y - radius * 0.38f, radius * 0.86f, paint)
+        paint.color = Color.rgb(255, 220, 140)
+        canvas.drawCircle(x + radius * 0.9f, y - radius * 0.65f, radius * 0.09f, paint)
+        canvas.drawCircle(x + radius * 1.35f, y - radius * 0.14f, radius * 0.06f, paint)
+        if (!compact) {
+            paint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            paint.textSize = 29f
+            canvas.drawText("지금 누우면 기상까지", 42f, 105f, paint)
+            paint.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            paint.textSize = 62f
+            paint.color = Color.WHITE
+            canvas.drawText("7시간 30분", 42f, 185f, paint)
+        }
+        return bitmap
+    }
+
     private fun showBedtimePreview(): String {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -309,14 +344,19 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         val pending = PendingIntent.getActivity(
             context, previewId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val body = "내일 오전 7:00 기상 · 지금 누우면 기상까지 7시간 30분"
+        val body = "기상까지 7시간 30분 · 내일 오전 7:00"
         manager.cancel(previewId)
         manager.notify(
             previewId,
             builder.setSmallIcon(android.R.drawable.ic_menu_today)
                 .setContentTitle("이제 슬슬 잘 시간이에요")
                 .setContentText(body)
-                .setStyle(Notification.BigTextStyle().bigText(body).setSummaryText("테스트 알림"))
+                .setLargeIcon(bedtimeArtwork(compact = true))
+                .setStyle(
+                    Notification.BigPictureStyle()
+                        .bigPicture(bedtimeArtwork(compact = false))
+                        .setSummaryText(body)
+                )
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
                 .setShowWhen(false)

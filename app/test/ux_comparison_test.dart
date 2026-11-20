@@ -32,6 +32,8 @@ void main() {
   });
 
   testWidgets('장소 조합과 요일 배정, 오늘 적용 및 중복 방지', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         home: MorningConceptScreen(

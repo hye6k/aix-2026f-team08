@@ -1178,6 +1178,7 @@ class _RoutineEditorState extends State<_RoutineEditor> {
   );
   late int? origin = widget.existing?.origin;
   late int? destination = widget.existing?.destination;
+  late TimeOfDay? wake = widget.existing?.wake;
   late TimeOfDay deadline =
       widget.existing?.deadline ?? const TimeOfDay(hour: 9, minute: 0);
   late Set<int> days = {...?widget.existing?.days};
@@ -1263,6 +1264,32 @@ class _RoutineEditorState extends State<_RoutineEditor> {
               ),
             ),
             const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('기상 시각 (선택)'),
+              subtitle: const Text('홈에서도 설정할 수 있어요.'),
+              trailing: TextButton(
+                onPressed: () async {
+                  final value = await showTimePicker(
+                    context: context,
+                    initialTime: wake ?? const TimeOfDay(hour: 7, minute: 0),
+                  );
+                  if (value != null && mounted) {
+                    setState(() => wake = value);
+                  }
+                },
+                child: Text(wake?.format(context) ?? '시간 정하기'),
+              ),
+            ),
+            if (wake != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => setState(() => wake = null),
+                  child: const Text('기상 시각 지우기'),
+                ),
+              ),
+            const SizedBox(height: 16),
             const Text(
               '어느 요일에 적용할까요?',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
@@ -1338,6 +1365,7 @@ class _RoutineEditorState extends State<_RoutineEditor> {
                     destination!,
                     deadline,
                     {...days},
+                    wake: wake,
                   ),
                 );
               },

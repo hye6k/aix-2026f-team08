@@ -279,6 +279,53 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         lastSummary = summary
     }
 
+    private fun showBedtimePreview(): String {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
+            return "permission_required"
+        }
+        if (!manager.areNotificationsEnabled()) return "blocked"
+
+        val channelId = "bedtime_preview"
+        val previewId = 4822
+        val builder = if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(
+                NotificationChannel(channelId, "취침 알림 테스트", NotificationManager.IMPORTANCE_HIGH)
+            )
+            if (manager.getNotificationChannel(channelId).importance == NotificationManager.IMPORTANCE_NONE) return "blocked"
+            Notification.Builder(context, channelId).setTimeoutAfter(300_000L)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(context)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setDefaults(Notification.DEFAULT_SOUND)
+        }
+        val launch = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(summaryLaunch, true)
+        val pending = PendingIntent.getActivity(
+            context, previewId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val body = "내일 오전 7:00 기상 · 지금 누우면 기상까지 7시간 30분"
+        manager.cancel(previewId)
+        manager.notify(
+            previewId,
+            builder.setSmallIcon(android.R.drawable.ic_menu_today)
+                .setContentTitle("이제 슬슬 잘 시간이에요")
+                .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body).setSummaryText("테스트 알림"))
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setAutoCancel(true)
+                .setShowWhen(false)
+                .setContentIntent(pending)
+                .build()
+        )
+        return "posted"
+    }
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
@@ -291,6 +338,7 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                     if (Build.VERSION.SDK_INT >= 33) activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
                     result.success(null)
                 }
+                "showBedtimePreview" -> result.success(showBedtimePreview())
                 "showRoutineSummary" -> {
                     showRoutineSummary(
                         requireNotNull(call.argument<String>("title")),

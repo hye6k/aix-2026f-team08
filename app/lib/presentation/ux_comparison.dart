@@ -1202,6 +1202,28 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
+  Future<void> _testBedtimeAlert(BuildContext dialogContext) async {
+    String? status;
+    String message;
+    try {
+      status = await _platform.invokeMethod<String>('showBedtimePreview');
+      message = switch (status) {
+        'posted' => '테스트 알림을 보냈어요. 상단 배너나 알림창을 확인해 주세요.',
+        'permission_required' => '알림 권한을 허용한 뒤 테스트를 다시 눌러 주세요.',
+        'blocked' => 'Android 설정에서 앱 알림과 취침 알림 테스트 채널을 켜 주세요.',
+        _ => '테스트 알림을 보내지 못했어요.',
+      };
+    } on PlatformException {
+      message = '테스트 알림을 보내지 못했어요.';
+    } on MissingPluginException {
+      message = 'Android 앱을 다시 빌드한 뒤 테스트해 주세요.';
+    }
+    if (!dialogContext.mounted || !mounted) return;
+    if (status == 'posted') Navigator.pop(dialogContext);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _openNotificationSettings() async {
     await showDialog<void>(
       context: context,
@@ -1221,6 +1243,11 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                 : null,
           ),
           actions: [
+            if (widget.developerOptions && Platform.isAndroid)
+              TextButton(
+                onPressed: () => _testBedtimeAlert(dialogContext),
+                child: const Text('강조 알림 테스트'),
+              ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('닫기'),

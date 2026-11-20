@@ -31,7 +31,7 @@ void main() {
     expect(find.text('개발자 옵션'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('내 장소'), findsOneWidget);
+    expect(find.text('장소 관리'), findsOneWidget);
   });
 
   testWidgets('장소 조합과 요일 배정, 오늘 적용 및 중복 방지', (tester) async {
@@ -70,9 +70,13 @@ void main() {
     }
 
     await tapText('시작하기');
-    expect(find.text('내 장소'), findsNothing);
+    expect(find.text('장소 관리'), findsNothing);
     await tapText('설정');
+    await tapText('장소 관리');
     await addPlace('집', '주소 1');
+    expect(find.text('집'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tapText('관리');
     await tapText('아침 루틴 만들기');
     await tester.enterText(find.widgetWithText(TextField, '루틴 이름'), '출근');
@@ -145,6 +149,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('오늘 · 월요일'), findsOneWidget);
     await tester.tap(find.text('설정').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('장소 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('집'));
     await tester.pumpAndSettle();

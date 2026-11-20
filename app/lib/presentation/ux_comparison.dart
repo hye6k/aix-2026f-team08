@@ -1044,6 +1044,59 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     ],
   );
 
+  void _openPlaces() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Theme(
+          data: _conceptTheme(),
+          child: StatefulBuilder(
+            builder: (context, refresh) {
+              Future<void> edit([_Place? place]) async {
+                await _placeEditor(place);
+                if (context.mounted) refresh(() {});
+              }
+
+              return Scaffold(
+                appBar: AppBar(title: const Text('장소 관리')),
+                body: SafeArea(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: ListView(
+                        padding: const EdgeInsets.all(20),
+                        children: [
+                          FilledButton.icon(
+                            onPressed: edit,
+                            icon: const Icon(Icons.add),
+                            label: const Text('장소 추가'),
+                          ),
+                          const SizedBox(height: 16),
+                          if (_places.isEmpty) const Text('아직 추가한 장소가 없어요.'),
+                          for (final place in _places)
+                            ListTile(
+                              leading: const Icon(Icons.place_outlined),
+                              title: Text(place.name),
+                              subtitle: Text(
+                                place.location.isEmpty
+                                    ? '주소 확인 불가'
+                                    : place.location,
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => edit(place),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _settings() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -1052,24 +1105,12 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 16),
-      _card('내 장소', [
-        if (_places.isEmpty) const Text('아직 추가한 장소가 없어요.'),
-        for (final p in _places)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.place_outlined),
-            title: Text(p.name),
-            subtitle: Text(p.location.isEmpty ? '주소 확인 불가' : p.location),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _placeEditor(p),
-          ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _placeEditor,
-          icon: const Icon(Icons.add),
-          label: const Text('장소 추가'),
-        ),
-      ]),
+      ListTile(
+        leading: const Icon(Icons.place_outlined),
+        title: const Text('장소 관리'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _openPlaces,
+      ),
       if (widget.developerOptions)
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 4),

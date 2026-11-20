@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'location_picker.dart';
@@ -164,6 +166,69 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   late final Future<SharedPreferences> _preferences =
       SharedPreferences.getInstance();
 
+  static const _platform = MethodChannel('morning_routine/platform');
+  static const _summaryPreference = 'ux_routine_summary_enabled';
+  bool _summaryEnabled = false;
+  bool _summaryReady = false;
+
+  Future<void> _syncRoutineSummary({bool readLaunch = false}) async {
+    if (!_summaryReady || !Platform.isAndroid) return;
+    try {
+      if (readLaunch &&
+          await _platform.invokeMethod<bool>('takeRoutineSummaryLaunch') ==
+              true &&
+          mounted) {
+        setState(() => _tab = 0);
+      }
+      final now = DateTime.now();
+      final (routine, day) = _homeRoutine(now, useMock: false);
+      if (!_summaryEnabled || routine == null) {
+        await _platform.invokeMethod<void>('clearRoutineSummary');
+        return;
+      }
+      String time(TimeOfDay value) =>
+          '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+      final places = _mockActive ? _originalPlaces! : _places;
+      final destination = places
+          .where((place) => place.id == routine.destination)
+          .firstOrNull;
+      final wake = routine.wake;
+      await _platform.invokeMethod<void>('showRoutineSummary', {
+        'title': routine.name,
+        'body':
+            '${day.month}/${day.day} · ${destination?.name ?? "도착지"} '
+            '${time(routine.deadline)}까지${wake == null ? "" : " · 기상 ${time(wake)}"}',
+        'expiresAt': DateTime(
+          day.year,
+          day.month,
+          day.day + 1,
+        ).millisecondsSinceEpoch,
+      });
+    } on PlatformException {
+      // The home card remains available if the system cannot post the summary.
+    } on MissingPluginException {
+      // This host does not provide Android notifications.
+    }
+  }
+
+  Future<void> _setRoutineSummary(bool enabled) async {
+    try {
+      if (!await (await _preferences).setBool(_summaryPreference, enabled) ||
+          !mounted) {
+        return;
+      }
+      setState(() => _summaryEnabled = enabled);
+      if (enabled && Platform.isAndroid) {
+        await _platform.invokeMethod<void>('requestNotificationPermission');
+      }
+      await _syncRoutineSummary();
+    } on PlatformException {
+      // The switch can be changed again after resolving the platform issue.
+    } on MissingPluginException {
+      // This host does not provide Android notifications.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -178,7 +243,12 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) setState(() {});
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() {});
+      unawaited(_syncRoutineSummary(readLaunch: true));
+    } else if (state == AppLifecycleState.paused) {
+      unawaited(_syncRoutineSummary());
+    }
   }
 
   @override
@@ -232,7 +302,15 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     } catch (_) {
       _storageError = '저장된 시안 데이터를 불러오지 못했어요. 다시 실행해 주세요.';
     }
-    if (mounted) setState(() => _loading = false);
+    if (!mounted) return;
+    if (widget.persist && Platform.isAndroid) {
+      _summaryEnabled =
+          (await _preferences).getBool(_summaryPreference) ?? false;
+      _summaryReady = true;
+    }
+    if (!mounted) return;
+    setState(() => _loading = false);
+    unawaited(_syncRoutineSummary(readLaunch: true));
   }
 
   Future<bool> _save(List<_Place> places, List<_Routine> routines) async {
@@ -316,6 +394,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         _places[index] = result;
       }
     });
+    unawaited(_syncRoutineSummary());
   }
 
   Future<void> _routineEditor({
@@ -355,6 +434,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
       }
       _tab = 2;
     });
+    unawaited(_syncRoutineSummary());
   }
 
   Widget _card(String title, List<Widget> children, {Widget? action}) =>
@@ -469,6 +549,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         ..clear()
         ..addAll(updated);
     });
+    unawaited(_syncRoutineSummary());
   }
 
   static const _mockLimit = 20;
@@ -615,14 +696,22 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     });
   }
 
+  (_Routine?, DateTime) _homeRoutine(DateTime now, {bool useMock = true}) {
+    final routines = !useMock && _mockActive ? _originalRoutines! : _routines;
+    _Routine? onDay(DateTime day) =>
+        routines.where((r) => r.days.contains(day.weekday)).firstOrNull;
+    final today = onDay(now);
+    final done = useMock && _mockActive && _mockTodayStatus != 'pending';
+    if (today != null && !done) return (today, now);
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    return (onDay(tomorrow), tomorrow);
+  }
+
   Widget _today() {
     final now = widget.now ?? DateTime.now();
-    final tomorrow = DateTime(now.year, now.month, now.day + 1);
-    final todayRoutine = _routineOn(now);
+    final (active, day) = _homeRoutine(now);
+    final showToday = day.day == now.day;
     final isDone = _mockActive && _mockTodayStatus != 'pending';
-    final showToday = todayRoutine != null && !isDone;
-    final active = showToday ? todayRoutine : _routineOn(tomorrow);
-    final day = showToday ? now : tomorrow;
     final when = '${showToday ? '오늘' : '내일'} · ${_days[day.weekday - 1]}요일';
     final wake = active?.wake;
     final wakeAt = wake == null
@@ -1113,6 +1202,35 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
+  Future<void> _openNotificationSettings() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refresh) => AlertDialog(
+          title: const Text('알림'),
+          content: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('잠금화면·알림창 루틴 표시'),
+            subtitle: const Text('잠금화면에 루틴 이름과 도착지가 표시될 수 있어요.'),
+            value: _summaryEnabled,
+            onChanged: _summaryReady
+                ? (value) async {
+                    await _setRoutineSummary(value);
+                    if (context.mounted) refresh(() {});
+                  }
+                : null,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('닫기'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _settings() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -1127,8 +1245,13 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         trailing: const Icon(Icons.chevron_right),
         onTap: _openPlaces,
       ),
+      ListTile(
+        leading: const Icon(Icons.notifications_outlined),
+        title: const Text('알림'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _openNotificationSettings,
+      ),
       for (final (icon, title, description) in const [
-        (Icons.notifications_outlined, '알림', '취침 안내와 출발 알림을 관리해요.'),
         (Icons.bedtime_outlined, '수면 목표', '목표 수면 시간을 설정해요.'),
         (Icons.location_searching, '권한 및 감지 상태', '알림과 위치 권한, 자동 감지 상태를 확인해요.'),
       ])

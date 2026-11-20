@@ -229,6 +229,56 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
     }
     override fun onListen(arguments: Any?, sink: EventChannel.EventSink) { MorningEvents.sink = sink }
     override fun onCancel(arguments: Any?) { MorningEvents.sink = null }
+    private val summaryId = 4821
+    private val summaryLaunch = "open_routine_summary"
+    private var lastSummary: Triple<String, String, Long>? = null
+
+    private fun showRoutineSummary(title: String, body: String, expiresAt: Long) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        if (!manager.areNotificationsEnabled()) return
+        val remaining = expiresAt - System.currentTimeMillis()
+        if (remaining <= 0) {
+            manager.cancel(summaryId)
+            lastSummary = null
+            return
+        }
+        val channelId = "routine_summary"
+        val builder = if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(
+                NotificationChannel(channelId, "아침 루틴 요약", NotificationManager.IMPORTANCE_LOW)
+            )
+            if (manager.getNotificationChannel(channelId).importance == NotificationManager.IMPORTANCE_NONE) return
+            Notification.Builder(context, channelId).setTimeoutAfter(remaining)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(context).setPriority(Notification.PRIORITY_LOW)
+        }
+        val summary = Triple(title, body, expiresAt)
+        if (lastSummary == summary && manager.activeNotifications.any { it.id == summaryId }) return
+        val launch = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(summaryLaunch, true)
+        val pending = PendingIntent.getActivity(
+            context, summaryId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        manager.notify(
+            summaryId,
+            builder.setSmallIcon(android.R.drawable.ic_menu_today)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setContentIntent(pending)
+                .build()
+        )
+        lastSummary = summary
+    }
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
@@ -240,6 +290,25 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                 "requestNotificationPermission" -> {
                     if (Build.VERSION.SDK_INT >= 33) activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
                     result.success(null)
+                }
+                "showRoutineSummary" -> {
+                    showRoutineSummary(
+                        requireNotNull(call.argument<String>("title")),
+                        requireNotNull(call.argument<String>("body")),
+                        requireNotNull(call.argument<Number>("expiresAt")).toLong()
+                    )
+                    result.success(null)
+                }
+                "clearRoutineSummary" -> {
+                    context.getSystemService(NotificationManager::class.java).cancel(summaryId)
+                    lastSummary = null
+                    result.success(null)
+                }
+                "takeRoutineSummaryLaunch" -> {
+                    val intent = activity.intent
+                    val opened = intent?.getBooleanExtra(summaryLaunch, false) == true
+                    if (opened) intent?.removeExtra(summaryLaunch)
+                    result.success(opened)
                 }
                 "schedule" -> {
                     val id = requireNotNull(call.argument<String>("id"))

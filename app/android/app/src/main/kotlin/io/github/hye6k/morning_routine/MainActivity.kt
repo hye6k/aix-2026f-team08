@@ -1,5 +1,6 @@
 package io.github.hye6k.morning_routine
 
+import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
@@ -8,6 +9,10 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         platform = MorningPlatform(this, flutterEngine.dartExecutor.binaryMessenger)
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
     override fun onResume() {
         super.onResume()

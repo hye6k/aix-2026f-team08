@@ -58,12 +58,12 @@ void main() {
       String button = '장소 추가',
     }) async {
       await tapText(button);
-      await tester.enterText(find.widgetWithText(TextField, '장소 이름'), name);
       await tapText('지도에서 선택');
       final picker = tester.element(find.byType(LocationPickerScreen));
       Navigator.of(picker).pop(SelectedLocation(37.5, 127.0, address));
       await tester.pumpAndSettle();
       expect(find.text(address), findsOneWidget);
+      await tester.enterText(find.widgetWithText(TextField, '장소 이름'), name);
       await tapText('장소 저장');
     }
 

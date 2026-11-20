@@ -1079,14 +1079,6 @@ class _PlaceEditorState extends State<_PlaceEditor> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          TextField(
-            controller: name,
-            decoration: const InputDecoration(
-              labelText: '장소 이름',
-              hintText: '예: 집',
-            ),
-          ),
-          const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => _chooseLocation(current: true),
             icon: const Icon(Icons.my_location),
@@ -1107,6 +1099,14 @@ class _PlaceEditorState extends State<_PlaceEditor> {
                 ? '위치를 선택해 주세요.'
                 : '주소를 확인할 수 없어요.',
           ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: name,
+            decoration: const InputDecoration(
+              labelText: '장소 이름',
+              hintText: '예: 집',
+            ),
+          ),
           if (error != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -1115,12 +1115,12 @@ class _PlaceEditorState extends State<_PlaceEditor> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: () {
-              if (name.text.trim().isEmpty) {
-                setState(() => error = '장소 이름을 입력해 주세요.');
-                return;
-              }
               if ((latitude == null || longitude == null) && address.isEmpty) {
                 setState(() => error = '위치를 선택해 주세요.');
+                return;
+              }
+              if (name.text.trim().isEmpty) {
+                setState(() => error = '장소 이름을 입력해 주세요.');
                 return;
               }
               Navigator.pop(

@@ -1027,7 +1027,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                     OutlinedButton(
                       onPressed: () =>
                           _testBedtimeAlert(routeContext, delayed: true),
-                      child: const Text('1분 뒤 취침 알림 테스트'),
+                      child: const Text('10초 뒤 취침 알림 테스트'),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -1275,8 +1275,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         delayed ? 'scheduleBedtimePreview' : 'showBedtimePreview',
       );
       message = switch (status) {
-        'scheduled' => '1분 뒤에 취침 알림이 와요. 지금 화면을 잠가 보세요.',
-        'scheduled_inexact' => '1분 뒤로 예약했어요. 정확한 알람 권한이 없어 조금 늦을 수 있어요.',
+        'scheduled' => '10초 뒤에 취침 알림이 와요. 지금 화면을 잠가 보세요.',
+        'scheduled_inexact' => '10초 뒤로 예약했어요. 정확한 알람 권한이 없어 조금 늦을 수 있어요.',
         'posted' => '테스트 알림을 보냈어요. 상단 배너나 알림창을 확인해 주세요.',
         'permission_required' => '알림 권한을 허용한 뒤 테스트를 다시 눌러 주세요.',
         'blocked' => 'Android 설정에서 앱 알림과 취침 알림 테스트 채널을 켜 주세요.',

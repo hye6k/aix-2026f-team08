@@ -304,7 +304,7 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
             context, 4824, Intent(context, BedtimePreviewReceiver::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val at = SystemClock.elapsedRealtime() + 60_000
+        val at = SystemClock.elapsedRealtime() + 10_000
         if (Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()) {
             try {
                 alarms.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pending)

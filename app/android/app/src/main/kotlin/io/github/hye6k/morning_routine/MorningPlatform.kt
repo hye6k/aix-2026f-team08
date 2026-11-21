@@ -439,6 +439,9 @@ private fun bedtimeArtwork(): Bitmap {
     return bitmap
 }
 
+private const val BEDTIME_PREVIEW_ID = 4822
+private const val CONFIRM_BEDTIME_PREVIEW = "io.github.hye6k.morning_routine.CONFIRM_BEDTIME_PREVIEW"
+
 private fun showBedtimePreview(context: Context): String {
     val manager = context.getSystemService(NotificationManager::class.java)
     if (Build.VERSION.SDK_INT >= 33 &&
@@ -449,13 +452,12 @@ private fun showBedtimePreview(context: Context): String {
     if (!manager.areNotificationsEnabled()) return "blocked"
 
     val channelId = "bedtime_preview"
-    val previewId = 4822
     val builder = if (Build.VERSION.SDK_INT >= 26) {
         manager.createNotificationChannel(
             NotificationChannel(channelId, "취침 알림 테스트", NotificationManager.IMPORTANCE_HIGH)
         )
         if (manager.getNotificationChannel(channelId).importance == NotificationManager.IMPORTANCE_NONE) return "blocked"
-        Notification.Builder(context, channelId).setTimeoutAfter(300_000L)
+        Notification.Builder(context, channelId)
     } else {
         @Suppress("DEPRECATION")
         Notification.Builder(context)
@@ -466,12 +468,17 @@ private fun showBedtimePreview(context: Context): String {
         .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         .putExtra("open_routine_summary", true)
     val pending = PendingIntent.getActivity(
-        context, previewId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        context, BEDTIME_PREVIEW_ID, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    val confirm = PendingIntent.getBroadcast(
+        context, BEDTIME_PREVIEW_ID,
+        Intent(context, BedtimePreviewReceiver::class.java).setAction(CONFIRM_BEDTIME_PREVIEW),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
     val body = "기상까지 7시간 30분 · 내일 오전 7:00"
-    manager.cancel(previewId)
+    manager.cancel(BEDTIME_PREVIEW_ID)
     manager.notify(
-        previewId,
+        BEDTIME_PREVIEW_ID,
         builder.setSmallIcon(R.drawable.ic_routine_notification)
             .setContentTitle("이제 슬슬 잘 시간이에요")
             .setContentText(body)
@@ -481,7 +488,12 @@ private fun showBedtimePreview(context: Context): String {
                     .setSummaryText("내일 오전 7:00 기상")
             )
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setAutoCancel(true)
+            .setOngoing(true)
+            .addAction(Notification.Action.Builder(
+                android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_routine_notification),
+                "기상 확인",
+                confirm
+            ).build())
             .setShowWhen(false)
             .setContentIntent(pending)
             .build()
@@ -491,6 +503,10 @@ private fun showBedtimePreview(context: Context): String {
 
 class BedtimePreviewReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        showBedtimePreview(context)
+        if (intent.action == CONFIRM_BEDTIME_PREVIEW) {
+            context.getSystemService(NotificationManager::class.java).cancel(BEDTIME_PREVIEW_ID)
+        } else {
+            showBedtimePreview(context)
+        }
     }
 }

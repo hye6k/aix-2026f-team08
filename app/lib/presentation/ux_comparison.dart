@@ -108,6 +108,44 @@ class _Routine {
   final TimeOfDay? wake;
 }
 
+class _Trip {
+  const _Trip(
+    this.routineId,
+    this.origin,
+    this.destination,
+    this.name,
+    this.departure,
+    this.arrival,
+  );
+
+  factory _Trip.fromJson(Map<String, dynamic> data) => _Trip(
+    data['routineId'] as int,
+    data['origin'] as int,
+    data['destination'] as int,
+    data['name'] as String,
+    DateTime.fromMillisecondsSinceEpoch(data['departure'] as int),
+    data['arrival'] == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(data['arrival'] as int),
+  );
+
+  final int routineId;
+  final int origin;
+  final int destination;
+  final String name;
+  final DateTime departure;
+  final DateTime? arrival;
+
+  Map<String, Object?> toJson() => {
+    'routineId': routineId,
+    'origin': origin,
+    'destination': destination,
+    'name': name,
+    'departure': departure.millisecondsSinceEpoch,
+    'arrival': arrival?.millisecondsSinceEpoch,
+  };
+}
+
 class _MockRecord {
   const _MockRecord(
     this.routine,
@@ -148,6 +186,9 @@ class MorningConceptScreen extends StatefulWidget {
 
 class _MorningConceptScreenState extends State<MorningConceptScreen>
     with WidgetsBindingObserver {
+  static const _tripPreference = 'ux_trip_records_v1';
+  List<_Trip> _trips = [];
+  bool _tripSaving = false;
   final _places = <_Place>[];
   final _routines = <_Routine>[];
   int _nextId = 0;
@@ -284,6 +325,12 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   Future<void> _load() async {
     try {
       if (widget.persist) {
+        final trips = (await _preferences).getString(_tripPreference);
+        if (trips != null) {
+          _trips = (jsonDecode(trips) as List)
+              .map((value) => _Trip.fromJson(value as Map<String, dynamic>))
+              .toList();
+        }
         _bedtimeLeadMinutes =
             (await _preferences).getInt(_bedtimeLeadPreference) ?? 60;
         _sleepGoalMinutes =
@@ -725,12 +772,95 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     });
   }
 
+  _Trip? get _activeTrip => _mockActive
+      ? null
+      : _trips.where((trip) => trip.arrival == null).firstOrNull;
+
+  Future<void> _recordTrip({_Routine? routine}) async {
+    if (_mockActive || _tripSaving) return;
+    final active = _activeTrip;
+    final now = widget.now ?? DateTime.now();
+    if (active != null && !now.isAfter(active.departure)) return;
+    if (active == null && routine == null) return;
+    final updated = [..._trips];
+    if (active != null) {
+      updated[updated.indexOf(active)] = _Trip(
+        active.routineId,
+        active.origin,
+        active.destination,
+        active.name,
+        active.departure,
+        now,
+      );
+    } else if (routine != null) {
+      updated.add(
+        _Trip(
+          routine.id,
+          routine.origin,
+          routine.destination,
+          routine.name,
+          now,
+          null,
+        ),
+      );
+    }
+    setState(() => _tripSaving = true);
+    try {
+      if (widget.persist &&
+          !await (await _preferences).setString(
+            _tripPreference,
+            jsonEncode(updated.map((trip) => trip.toJson()).toList()),
+          )) {
+        throw StateError('저장 실패');
+      }
+      if (mounted) setState(() => _trips = updated);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('이동 기록을 저장하지 못했어요.')));
+      }
+    } finally {
+      if (mounted) setState(() => _tripSaving = false);
+    }
+  }
+
+  int? _typicalTripMinutes(_Routine route) {
+    if (_mockActive) return null;
+    final samples =
+        _trips.reversed
+            .where(
+              (trip) =>
+                  trip.origin == route.origin &&
+                  trip.destination == route.destination &&
+                  trip.arrival != null,
+            )
+            .map((trip) => trip.arrival!.difference(trip.departure).inSeconds)
+            .where((seconds) => seconds > 0 && seconds < 24 * 60 * 60)
+            .take(5)
+            .toList()
+          ..sort();
+    if (samples.length < 3) return null;
+    return ((samples[(samples.length - 1) ~/ 2] +
+                samples[samples.length ~/ 2]) /
+            120)
+        .ceil();
+  }
+
+  bool _completedTrip(_Routine route, DateTime day) => _trips.any(
+    (trip) =>
+        trip.routineId == route.id &&
+        trip.arrival != null &&
+        DateUtils.isSameDay(trip.departure, day),
+  );
+
   (_Routine?, DateTime) _homeRoutine(DateTime now, {bool useMock = true}) {
     final routines = !useMock && _mockActive ? _originalRoutines! : _routines;
     _Routine? onDay(DateTime day) =>
         routines.where((r) => r.days.contains(day.weekday)).firstOrNull;
     final today = onDay(now);
-    final done = useMock && _mockActive && _mockTodayStatus != 'pending';
+    final done = useMock && _mockActive
+        ? _mockTodayStatus != 'pending'
+        : today != null && _completedTrip(today, now);
     if (today != null && !done) return (today, now);
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     return (onDay(tomorrow), tomorrow);
@@ -739,7 +869,18 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   Widget _today() {
     final now = widget.now ?? DateTime.now();
     final (active, day) = _homeRoutine(now);
-    final showToday = day.day == now.day;
+    final showToday = DateUtils.isSameDay(day, now);
+    final trip = _activeTrip;
+    final travelMinutes = active == null ? null : _typicalTripMinutes(active);
+    final leaveAt = active == null || travelMinutes == null
+        ? null
+        : DateTime(
+            day.year,
+            day.month,
+            day.day,
+            active.deadline.hour,
+            active.deadline.minute,
+          ).subtract(Duration(minutes: travelMinutes));
     final isDone = _mockActive && _mockTodayStatus != 'pending';
     final when = '${showToday ? '오늘' : '내일'} · ${_days[day.weekday - 1]}요일';
     final wake = active?.wake;
@@ -765,6 +906,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             padding: EdgeInsets.only(bottom: 12),
             child: Text('예시 데이터 사용 중', style: TextStyle(color: _Colors.muted)),
           ),
+        if (trip != null)
+          _card('이동 중 · ${trip.name}', [
+            Text('출발 ${_time(trip.departure)}'),
+            FilledButton(
+              onPressed: _tripSaving ? null : () => _recordTrip(),
+              child: const Text('도착 기록'),
+            ),
+          ]),
         if (active == null)
           _card(
             _routines.isEmpty
@@ -823,6 +972,22 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             ),
           ),
           const SizedBox(height: 16),
+          if (!_mockActive && trip == null)
+            _card('이동', [
+              if (leaveAt != null)
+                Text(
+                  '${_date(leaveAt)} ${_time(leaveAt)}까지 출발 권장 · 평소 $travelMinutes분',
+                )
+              else
+                const Text('같은 경로의 이동 기록이 3건 쌓이면 출발 시각을 안내해요.'),
+              if (showToday)
+                FilledButton(
+                  onPressed: _tripSaving
+                      ? null
+                      : () => _recordTrip(routine: active),
+                  child: const Text('출발 기록'),
+                ),
+            ]),
           _card('기상 시간', [
             Text(
               active.wake == null
@@ -960,12 +1125,21 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           ),
         const SizedBox(height: 14),
         if (!_mockActive)
-          _card('아직 기록이 없어요', const [
-            Text(
-              '수면 → 기상 → 출발 → 도착으로 이어진 사이클이 이곳에 표시될 예정이에요.',
-              style: TextStyle(height: 1.5),
-            ),
-          ])
+          if (_trips.every((trip) => trip.arrival == null))
+            _card('아직 기록이 없어요', const [Text('홈에서 출발과 도착을 기록할 수 있어요.')])
+          else
+            for (final trip in _trips.reversed.where(
+              (trip) => trip.arrival != null,
+            ))
+              _card(trip.name, [
+                Text(_date(trip.departure)),
+                Text(
+                  '출발 ${_time(trip.departure)} · 도착 ${_time(trip.arrival!)}',
+                ),
+                Text(
+                  '이동 ${_duration(trip.arrival!.difference(trip.departure))}',
+                ),
+              ])
         else if (records.isEmpty)
           _card('예시 기록이 없어요', const [Text('예시 루틴의 적용 요일을 확인해 주세요.')])
         else ...[

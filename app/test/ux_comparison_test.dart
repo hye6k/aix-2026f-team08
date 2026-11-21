@@ -247,6 +247,8 @@ void main() {
   });
 
   testWidgets('직접 정한 기상 시각을 저장하고 실제 알람과 구분한다', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     SharedPreferences.setMockInitialValues({
       'ux_location_draft_v1': jsonEncode({
         'nextId': 3,
@@ -286,6 +288,57 @@ void main() {
     expect(data['routines'][0]['wakeMinute'], 0);
     expect(find.text('기상 시간 변경'), findsOneWidget);
     expect(find.text('설정한 기상 시각이 지났어요.'), findsOneWidget);
+  });
+
+  testWidgets('같은 경로의 기록 3건으로 출발 시각을 계산한다', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final morning = DateTime(2026, 11, 9, 8);
+    SharedPreferences.setMockInitialValues({
+      'ux_location_draft_v1': jsonEncode({
+        'nextId': 3,
+        'places': [
+          {'id': 0, 'name': '집', 'location': '주소'},
+          {'id': 1, 'name': '학교', 'location': '주소'},
+        ],
+        'routines': [
+          {
+            'id': 2,
+            'name': '등교',
+            'origin': 0,
+            'destination': 1,
+            'hour': 9,
+            'minute': 0,
+            'days': [1],
+          },
+        ],
+      }),
+      'ux_trip_records_v1': jsonEncode([
+        for (final (day, minutes) in [(2, 30), (3, 35), (4, 90)])
+          {
+            'routineId': 2,
+            'name': '등교',
+            'origin': 0,
+            'destination': 1,
+            'departure': DateTime(2026, 11, day, 8).millisecondsSinceEpoch,
+            'arrival': DateTime(
+              2026,
+              11,
+              day,
+              8,
+              minutes,
+            ).millisecondsSinceEpoch,
+          },
+      ]),
+    });
+    await tester.pumpWidget(
+      MaterialApp(home: MorningConceptScreen(now: morning)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('08:25까지 출발 권장 · 평소 35분'), findsOneWidget);
+    await tester.tap(find.text('출발 기록'));
+    await tester.pumpAndSettle();
+    expect(find.text('도착 기록'), findsOneWidget);
   });
 
   for (final scenario in [

@@ -91,12 +91,16 @@ void main() {
     await tapText('일정 설정');
     await tapText('월');
     await tapText('일정 저장');
+    expect(find.text('기상 시각을 정해 주세요.'), findsOneWidget);
+    await tapText('시간 정하기');
+    await tapText('OK');
+    await tapText('일정 저장');
     expect(find.text('출근'), findsOneWidget);
     await tapText('홈');
     expect(find.text('오늘 · 월요일'), findsOneWidget);
     expect(find.text('회사'), findsOneWidget);
     expect(find.text('집 → 회사'), findsNothing);
-    expect(find.text('기상 시간 정하기'), findsOneWidget);
+    expect(find.text('기상 시간 변경'), findsOneWidget);
     await tapText('관리');
     await tapText('아침 루틴 만들기');
     await tester.enterText(find.widgetWithText(TextField, '루틴 이름'), '다른 루틴');

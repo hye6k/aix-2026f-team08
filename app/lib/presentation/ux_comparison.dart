@@ -1805,8 +1805,7 @@ class _RoutineEditorState extends State<_RoutineEditor> {
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('기상 시각 (선택)'),
-                subtitle: const Text('홈에서도 설정할 수 있어요.'),
+                title: const Text('기상 시각'),
                 trailing: TextButton(
                   onPressed: () async {
                     final value = await showTimePicker(
@@ -1814,20 +1813,15 @@ class _RoutineEditorState extends State<_RoutineEditor> {
                       initialTime: wake ?? const TimeOfDay(hour: 7, minute: 0),
                     );
                     if (value != null && mounted) {
-                      setState(() => wake = value);
+                      setState(() {
+                        wake = value;
+                        error = null;
+                      });
                     }
                   },
                   child: Text(wake?.format(context) ?? '시간 정하기'),
                 ),
               ),
-              if (wake != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => setState(() => wake = null),
-                    child: const Text('기상 시각 지우기'),
-                  ),
-                ),
               const SizedBox(height: 16),
               const Text(
                 '어느 요일에 적용할까요?',
@@ -1893,6 +1887,10 @@ class _RoutineEditorState extends State<_RoutineEditor> {
                 }
                 if (origin == destination) {
                   setState(() => error = '출발지와 도착지는 서로 다르게 선택해 주세요.');
+                  return;
+                }
+                if (widget.schedule && wake == null) {
+                  setState(() => error = '기상 시각을 정해 주세요.');
                   return;
                 }
                 Navigator.pop(

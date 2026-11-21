@@ -6,7 +6,7 @@
     <application
         android:label="수면과 아침 루틴"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/ic_routine_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"

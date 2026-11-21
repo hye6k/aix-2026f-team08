@@ -111,7 +111,7 @@ internal class MorningAlarms(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, candidateChannel) else Notification.Builder(context)
         notifications.notify("wake-candidate", 1, builder
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_routine_notification)
             .setContentTitle("기상 여부를 확인해 주세요")
             .setContentText("화면 활동이 감지됐어요. 앱에서 확인하거나 취소해 주세요.")
             .setCategory(Notification.CATEGORY_REMINDER)
@@ -179,7 +179,7 @@ internal class MorningAlarms(private val context: Context) {
         }
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).setData(Uri.Builder().scheme("morning-routine").authority("open").appendPath(id).build()), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, channel) else Notification.Builder(context)
-        builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("기상 알람")
+        builder.setSmallIcon(R.drawable.ic_routine_notification).setContentTitle("기상 알람")
             .setContentText("기상 확인은 앱에서 별도로 진행해 주세요.").setCategory(Notification.CATEGORY_ALARM)
             .setContentIntent(open).setOngoing(true)
             .addAction(Notification.Action.Builder(null, "알람 해제", token(id, "dismiss", at)).build())
@@ -272,7 +272,7 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         )
         manager.notify(
             summaryId,
-            builder.setSmallIcon(android.R.drawable.ic_menu_today)
+            builder.setSmallIcon(R.drawable.ic_routine_notification)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))
@@ -472,7 +472,7 @@ private fun showBedtimePreview(context: Context): String {
     manager.cancel(previewId)
     manager.notify(
         previewId,
-        builder.setSmallIcon(android.R.drawable.ic_menu_today)
+        builder.setSmallIcon(R.drawable.ic_routine_notification)
             .setContentTitle("이제 슬슬 잘 시간이에요")
             .setContentText(body)
             .setStyle(

@@ -148,7 +148,7 @@ internal class BedtimeReminders(private val context: Context) {
         )
         notifications.notify(
             CARD,
-            builder.setSmallIcon(android.R.drawable.ic_menu_today)
+            builder.setSmallIcon(R.drawable.ic_routine_notification)
                 .setContentTitle(reminder.name + " · 취침 안내")
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))

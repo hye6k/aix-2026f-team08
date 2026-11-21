@@ -895,6 +895,19 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     return (onDay(tomorrow), tomorrow);
   }
 
+  Widget _tripMenu({_Routine? routine, Color? iconColor}) =>
+      PopupMenuButton<void>(
+        tooltip: '이동 기록 더보기',
+        icon: Icon(Icons.more_horiz, color: iconColor),
+        enabled: !_tripSaving,
+        itemBuilder: (_) => [
+          PopupMenuItem<void>(
+            onTap: () => _recordTrip(routine: routine),
+            child: Text(routine == null ? '도착했어요' : '출발했어요'),
+          ),
+        ],
+      );
+
   Widget _today() {
     final now = _now;
     final (active, day) = _homeRoutine(now);
@@ -927,9 +940,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           '다가오는 아침',
           style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
         ),
-        const SizedBox(height: 8),
-        const Text('다음으로 예정된 아침 루틴', style: TextStyle(color: _Colors.muted)),
-        const SizedBox(height: 22),
+        const SizedBox(height: 16),
         if (_mockActive)
           const Padding(
             padding: EdgeInsets.only(bottom: 12),
@@ -945,10 +956,11 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           ),
         if (trip != null)
           _card('이동 중 · ${_placeName(trip.destination)}', [
-            Text('출발 ${_time(trip.departure)}'),
-            OutlinedButton(
-              onPressed: _tripSaving ? null : () => _recordTrip(),
-              child: const Text('도착했어요'),
+            Row(
+              children: [
+                Expanded(child: Text('출발 ${_time(trip.departure)}')),
+                _tripMenu(),
+              ],
             ),
           ])
         else if (active == null)
@@ -987,41 +999,39 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(when, style: const TextStyle(color: Color(0xffc2dccd))),
-                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        when,
+                        style: const TextStyle(color: Color(0xffc2dccd)),
+                      ),
+                    ),
+                    if (showToday)
+                      _tripMenu(routine: active, iconColor: Colors.white),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 Text(
-                  _placeName(active.destination),
+                  leaveAt == null
+                      ? '${active.deadline.format(context)}까지 도착'
+                      : '${DateUtils.isSameDay(leaveAt, day) ? '' : '${leaveAt.month}/${leaveAt.day} '}${_time(leaveAt)}까지 출발 권장',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
-                    fontSize: 25,
+                    fontSize: 27,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
-                  '${active.deadline.format(context)}까지 도착',
+                  leaveAt == null
+                      ? _placeName(active.destination)
+                      : '${_placeName(active.destination)} · ${active.deadline.format(context)}까지 도착',
                   style: const TextStyle(
                     color: Color(0xffd5e6db),
-                    fontSize: 16,
+                    fontSize: 15,
                   ),
                 ),
-                if (leaveAt != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${DateUtils.isSameDay(leaveAt, day) ? '' : '${leaveAt.month}/${leaveAt.day} '}${_time(leaveAt)}까지 출발 권장 · 평소 $travelMinutes분',
-                    style: const TextStyle(color: Color(0xffd5e6db)),
-                  ),
-                ],
-                if (showToday) ...[
-                  const SizedBox(height: 12),
-                  TextButton(
-                    style: TextButton.styleFrom(foregroundColor: Colors.white),
-                    onPressed: _tripSaving
-                        ? null
-                        : () => _recordTrip(routine: active),
-                    child: const Text('출발했어요'),
-                  ),
-                ],
               ],
             ),
           ),

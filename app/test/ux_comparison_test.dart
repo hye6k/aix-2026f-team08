@@ -100,7 +100,7 @@ void main() {
     expect(find.text('출근'), findsOneWidget);
     await tapText('홈');
     expect(find.text('오늘 · 월요일'), findsOneWidget);
-    expect(find.text('회사'), findsOneWidget);
+    expect(find.textContaining('회사'), findsOneWidget);
     expect(find.text('집 → 회사'), findsNothing);
     expect(find.text('기상 시간 변경'), findsOneWidget);
     await tapText('관리');
@@ -208,9 +208,11 @@ void main() {
     await tapVisible('대학생 예시 데이터 불러오기');
     expect(find.textContaining('까지 출발 권장'), findsOneWidget);
     expect(find.text('오늘 · 월요일'), findsOneWidget);
+    await tester.tap(find.byTooltip('이동 기록 더보기'));
+    await tester.pumpAndSettle();
     await tapVisible('출발했어요');
     expect(find.textContaining('이동 중'), findsOneWidget);
-    expect(find.text('도착했어요'), findsOneWidget);
+    expect(find.textContaining('이동 중'), findsOneWidget);
     expect(
       (await SharedPreferences.getInstance()).getString('ux_trip_records_v1'),
       isNull,
@@ -320,7 +322,11 @@ void main() {
     }
     expect(find.textContaining('가상 시각'), findsOneWidget);
     expect(find.text('오늘 · 월요일'), findsOneWidget);
+    await tester.tap(find.byTooltip('이동 기록 더보기'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('출발했어요'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('이동 기록 더보기'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('도착했어요'));
     await tester.pumpAndSettle();
@@ -378,10 +384,12 @@ void main() {
       MaterialApp(home: MorningConceptScreen(now: morning)),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('08:25까지 출발 권장 · 평소 35분'), findsOneWidget);
+    expect(find.textContaining('08:25까지 출발 권장'), findsOneWidget);
+    await tester.tap(find.byTooltip('이동 기록 더보기'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('출발했어요'));
     await tester.pumpAndSettle();
-    expect(find.text('도착했어요'), findsOneWidget);
+    expect(find.textContaining('이동 중'), findsOneWidget);
   });
 
   for (final scenario in [

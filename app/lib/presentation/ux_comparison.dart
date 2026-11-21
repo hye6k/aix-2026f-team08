@@ -169,6 +169,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   static const _platform = MethodChannel('morning_routine/platform');
   static const _sleepGoalPreference = 'ux_sleep_goal_minutes';
   int _sleepGoalMinutes = 480;
+  static const _bedtimeLeadPreference = 'ux_bedtime_lead_minutes';
+  int _bedtimeLeadMinutes = 60;
   static const _summaryPreference = 'ux_routine_summary_enabled';
   bool _summaryEnabled = false;
   bool _summaryReady = false;
@@ -182,6 +184,25 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           mounted) {
         setState(() => _tab = 0);
       }
+      final realRoutines = _mockActive ? _originalRoutines! : _routines;
+      await _platform.invokeMethod<void>(
+        'configureBedtimeReminders',
+        jsonEncode({
+          'enabled': _summaryEnabled,
+          'goalMinutes': _sleepGoalMinutes,
+          'leadMinutes': _bedtimeLeadMinutes,
+          'routes': [
+            for (final route in realRoutines)
+              if (route.wake case final wake? when route.days.isNotEmpty)
+                {
+                  'name': route.name,
+                  'days': route.days.toList()..sort(),
+                  'hour': wake.hour,
+                  'minute': wake.minute,
+                },
+          ],
+        }),
+      );
       final now = DateTime.now();
       final (routine, day) = _homeRoutine(now, useMock: false);
       if (!_summaryEnabled || routine == null) {
@@ -263,6 +284,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   Future<void> _load() async {
     try {
       if (widget.persist) {
+        _bedtimeLeadMinutes =
+            (await _preferences).getInt(_bedtimeLeadPreference) ?? 60;
         _sleepGoalMinutes =
             (await _preferences).getInt(_sleepGoalPreference) ?? 480;
       }
@@ -1000,6 +1023,31 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
               body: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
+                  DropdownButtonFormField<int>(
+                    initialValue: _bedtimeLeadMinutes,
+                    decoration: const InputDecoration(labelText: '취침 알림 시작'),
+                    items: [
+                      for (final hours in [1, 2, 3, 4, 5, 6])
+                        DropdownMenuItem(
+                          value: hours * 60,
+                          child: Text('취침 $hours시간 전'),
+                        ),
+                    ],
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      if (widget.persist &&
+                          !await (await _preferences).setInt(
+                            _bedtimeLeadPreference,
+                            value,
+                          )) {
+                        return;
+                      }
+                      if (!mounted) return;
+                      _bedtimeLeadMinutes = value;
+                      unawaited(_syncRoutineSummary());
+                    },
+                  ),
+                  const SizedBox(height: 24),
                   const Text(
                     '예시 데이터',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
@@ -1239,7 +1287,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           content: SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('잠금화면·알림창 루틴 표시'),
-            subtitle: const Text('잠금화면에 루틴 이름과 도착지가 표시될 수 있어요.'),
+            subtitle: const Text('루틴 요약과 예약된 취침 안내를 표시해요.'),
             value: _summaryEnabled,
             onChanged: _summaryReady
                 ? (value) async {
@@ -1322,7 +1370,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           !await (await _preferences).setInt(_sleepGoalPreference, goal)) {
         throw StateError('저장 실패');
       }
-      if (mounted) setState(() => _sleepGoalMinutes = goal);
+      if (mounted) {
+        setState(() => _sleepGoalMinutes = goal);
+        unawaited(_syncRoutineSummary());
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)

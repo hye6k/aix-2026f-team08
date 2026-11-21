@@ -24,6 +24,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
@@ -284,81 +285,36 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         lastSummary = summary
     }
 
-    private fun bedtimeArtwork(): Bitmap {
-        val bitmap = Bitmap.createBitmap(800, 280, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val background = Color.rgb(27, 37, 66)
-        canvas.drawColor(background)
-        val x = 649f
-        val y = 152f
-        val radius = 78f
-        paint.color = Color.rgb(255, 220, 140)
-        canvas.drawCircle(x, y, radius, paint)
-        paint.color = background
-        canvas.drawCircle(x + radius * 0.46f, y - radius * 0.38f, radius * 0.86f, paint)
-        paint.color = Color.rgb(255, 220, 140)
-        canvas.drawCircle(x + radius * 0.9f, y - radius * 0.65f, radius * 0.09f, paint)
-        canvas.drawCircle(x + radius * 1.35f, y - radius * 0.14f, radius * 0.06f, paint)
-        paint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        paint.textSize = 29f
-        canvas.drawText("지금 누우면 기상까지", 42f, 105f, paint)
-        paint.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        paint.textSize = 62f
-        paint.color = Color.WHITE
-        canvas.drawText("7시간 30분", 42f, 185f, paint)
-        return bitmap
-    }
-
-    private fun showBedtimePreview(): String {
-        val manager = context.getSystemService(NotificationManager::class.java)
+    private fun bedtimePreview(delayed: Boolean): String {
         if (Build.VERSION.SDK_INT >= 33 &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
             return "permission_required"
         }
-        if (!manager.areNotificationsEnabled()) return "blocked"
+        if (!delayed) return showBedtimePreview(context)
+        val notifications = context.getSystemService(NotificationManager::class.java)
+        if (!notifications.areNotificationsEnabled() ||
+            (Build.VERSION.SDK_INT >= 26 &&
+                notifications.getNotificationChannel("bedtime_preview")?.importance == NotificationManager.IMPORTANCE_NONE)
+        ) return "blocked"
 
-        val channelId = "bedtime_preview"
-        val previewId = 4822
-        val builder = if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(
-                NotificationChannel(channelId, "취침 알림 테스트", NotificationManager.IMPORTANCE_HIGH)
-            )
-            if (manager.getNotificationChannel(channelId).importance == NotificationManager.IMPORTANCE_NONE) return "blocked"
-            Notification.Builder(context, channelId).setTimeoutAfter(300_000L)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(context)
-                .setPriority(Notification.PRIORITY_HIGH)
-                .setDefaults(Notification.DEFAULT_SOUND)
+        val alarms = context.getSystemService(AlarmManager::class.java)
+        val pending = PendingIntent.getBroadcast(
+            context, 4824, Intent(context, BedtimePreviewReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val at = SystemClock.elapsedRealtime() + 60_000
+        if (Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()) {
+            try {
+                alarms.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pending)
+                return "scheduled"
+            } catch (_: SecurityException) {
+                // Use an inexact alarm if exact access changed during scheduling.
+            }
         }
-        val launch = Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            .putExtra(summaryLaunch, true)
-        val pending = PendingIntent.getActivity(
-            context, previewId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val body = "기상까지 7시간 30분 · 내일 오전 7:00"
-        manager.cancel(previewId)
-        manager.notify(
-            previewId,
-            builder.setSmallIcon(android.R.drawable.ic_menu_today)
-                .setContentTitle("이제 슬슬 잘 시간이에요")
-                .setContentText(body)
-                .setStyle(
-                    Notification.BigPictureStyle()
-                        .bigPicture(bedtimeArtwork())
-                        .setSummaryText("내일 오전 7:00 기상")
-                )
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
-                .setAutoCancel(true)
-                .setShowWhen(false)
-                .setContentIntent(pending)
-                .build()
-        )
-        return "posted"
+        alarms.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pending)
+        return "scheduled_inexact"
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -377,7 +333,8 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                     BedtimeReminders(context).configure(requireNotNull(call.arguments as? String))
                     result.success(null)
                 }
-                "showBedtimePreview" -> result.success(showBedtimePreview())
+                "showBedtimePreview" -> result.success(bedtimePreview(delayed = false))
+                "scheduleBedtimePreview" -> result.success(bedtimePreview(delayed = true))
                 "showRoutineSummary" -> {
                     showRoutineSummary(
                         requireNotNull(call.argument<String>("title")),
@@ -453,5 +410,87 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         MorningEvents.issueListener = null
         methods.setMethodCallHandler(null); events.setStreamHandler(null)
         MorningEvents.sink = null; context.unregisterReceiver(receiver)
+    }
+}
+
+private fun bedtimeArtwork(): Bitmap {
+    val bitmap = Bitmap.createBitmap(800, 280, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val background = Color.rgb(27, 37, 66)
+    canvas.drawColor(background)
+    val x = 649f
+    val y = 152f
+    val radius = 78f
+    paint.color = Color.rgb(255, 220, 140)
+    canvas.drawCircle(x, y, radius, paint)
+    paint.color = background
+    canvas.drawCircle(x + radius * 0.46f, y - radius * 0.38f, radius * 0.86f, paint)
+    paint.color = Color.rgb(255, 220, 140)
+    canvas.drawCircle(x + radius * 0.9f, y - radius * 0.65f, radius * 0.09f, paint)
+    canvas.drawCircle(x + radius * 1.35f, y - radius * 0.14f, radius * 0.06f, paint)
+    paint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    paint.textSize = 29f
+    canvas.drawText("지금 누우면 기상까지", 42f, 105f, paint)
+    paint.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+    paint.textSize = 62f
+    paint.color = Color.WHITE
+    canvas.drawText("7시간 30분", 42f, 185f, paint)
+    return bitmap
+}
+
+private fun showBedtimePreview(context: Context): String {
+    val manager = context.getSystemService(NotificationManager::class.java)
+    if (Build.VERSION.SDK_INT >= 33 &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+        return "permission_required"
+    }
+    if (!manager.areNotificationsEnabled()) return "blocked"
+
+    val channelId = "bedtime_preview"
+    val previewId = 4822
+    val builder = if (Build.VERSION.SDK_INT >= 26) {
+        manager.createNotificationChannel(
+            NotificationChannel(channelId, "취침 알림 테스트", NotificationManager.IMPORTANCE_HIGH)
+        )
+        if (manager.getNotificationChannel(channelId).importance == NotificationManager.IMPORTANCE_NONE) return "blocked"
+        Notification.Builder(context, channelId).setTimeoutAfter(300_000L)
+    } else {
+        @Suppress("DEPRECATION")
+        Notification.Builder(context)
+            .setPriority(Notification.PRIORITY_HIGH)
+            .setDefaults(Notification.DEFAULT_SOUND)
+    }
+    val launch = Intent(context, MainActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        .putExtra("open_routine_summary", true)
+    val pending = PendingIntent.getActivity(
+        context, previewId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    val body = "기상까지 7시간 30분 · 내일 오전 7:00"
+    manager.cancel(previewId)
+    manager.notify(
+        previewId,
+        builder.setSmallIcon(android.R.drawable.ic_menu_today)
+            .setContentTitle("이제 슬슬 잘 시간이에요")
+            .setContentText(body)
+            .setStyle(
+                Notification.BigPictureStyle()
+                    .bigPicture(bedtimeArtwork())
+                    .setSummaryText("내일 오전 7:00 기상")
+            )
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setShowWhen(false)
+            .setContentIntent(pending)
+            .build()
+    )
+    return "posted"
+}
+
+class BedtimePreviewReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        showBedtimePreview(context)
     }
 }

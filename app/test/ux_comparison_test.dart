@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('새 화면에서 시작하고 설정의 개발자 옵션에서 기존 화면을 연다', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const MorningRoutineApp(compareUi: true));
     await tester.pumpAndSettle();
     expect(find.text('나의 아침을\n가볍게 준비해요'), findsOneWidget);
@@ -163,6 +165,8 @@ void main() {
   });
 
   testWidgets('예시 데이터의 완료·실패는 내일로 전환하고 원본은 보존한다', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final original = jsonEncode({
       'nextId': 3,
       'places': [
@@ -296,6 +300,37 @@ void main() {
     expect(data['routines'][0]['wakeMinute'], 0);
     expect(find.text('기상 시간 변경'), findsOneWidget);
     expect(find.text('설정한 기상 시각이 지났어요.'), findsOneWidget);
+  });
+
+  testWidgets('출발·도착 테스트는 가상 월요일에 오늘 루틴을 연다', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MorningConceptScreen(
+          now: DateTime(2026, 11, 15),
+          developerOptions: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final label in ['시작하기', '설정', '개발자 옵션', '출발·도착 테스트']) {
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+    expect(find.textContaining('가상 시각'), findsOneWidget);
+    expect(find.text('오늘 · 월요일'), findsOneWidget);
+    await tester.tap(find.text('출발했어요'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('도착했어요'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('기록'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('출발 08:00 · 도착 08:00'), findsOneWidget);
+    expect(
+      (await SharedPreferences.getInstance()).getString('ux_trip_records_v1'),
+      isNull,
+    );
   });
 
   testWidgets('같은 경로의 기록 3건으로 출발 시각을 계산한다', (tester) async {

@@ -634,13 +634,24 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   int _mockPlaceCount = 4;
   int _mockRoutineCount = 3;
 
-  void _mockExample({bool rest = false}) {
+  DateTime? _scenarioStart;
+  Stopwatch? _scenarioClock;
+
+  DateTime get _now =>
+      _scenarioStart?.add(_scenarioClock!.elapsed) ??
+      widget.now ??
+      DateTime.now();
+
+  void _mockExample({bool rest = false, bool tripScenario = false}) {
     if (!_mockActive) {
       _originalPlaces = [..._places];
       _originalRoutines = [..._routines];
       _originalNextId = _nextId;
     }
-    final now = widget.now ?? DateTime.now();
+    // Only the mock UI uses this clock; Android scheduling uses device time.
+    _scenarioStart = tripScenario ? DateTime(2026, 11, 9, 8) : null;
+    _scenarioClock = tripScenario ? (Stopwatch()..start()) : null;
+    final now = _now;
     final later = DateTime(now.year, now.month, now.day + 2);
     setState(() {
       _mockActive = true;
@@ -677,7 +688,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             latitude: 37.51 + i * 0.004,
             longitude: 127.01 + i * 0.005,
           ),
-      ].take(_mockPlaceCount).toList();
+      ].take(tripScenario ? 4 : _mockPlaceCount).toList();
       final routines = <_Routine>[
         _Routine(
           20,
@@ -741,7 +752,9 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         ..clear()
         ..addAll([
           if (places.length >= 2)
-            for (final routine in routines.take(_mockRoutineCount))
+            for (final routine in routines.take(
+              tripScenario ? 3 : _mockRoutineCount,
+            ))
               _Routine(
                 routine.id,
                 routine.name,
@@ -768,6 +781,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         ..addAll(_originalRoutines!);
       _nextId = _originalNextId!;
       _mockActive = false;
+      _scenarioStart = null;
+      _scenarioClock = null;
       _mockTrips = [];
       _recordMonth = null;
       _originalPlaces = null;
@@ -783,7 +798,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     if (_tripSaving) return;
     final isMock = _mockActive;
     final active = _activeTrip;
-    final now = widget.now ?? DateTime.now();
+    final now = _now;
     if (active != null && !now.isAfter(active.departure)) return;
     if (active == null && routine == null) return;
     final updated = [..._visibleTrips];
@@ -881,7 +896,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   }
 
   Widget _today() {
-    final now = widget.now ?? DateTime.now();
+    final now = _now;
     final (active, day) = _homeRoutine(now);
     final showToday = DateUtils.isSameDay(day, now);
     final trip = _activeTrip;
@@ -919,6 +934,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           const Padding(
             padding: EdgeInsets.only(bottom: 12),
             child: Text('예시 데이터 사용 중', style: TextStyle(color: _Colors.muted)),
+          ),
+        if (_scenarioStart != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              '가상 시각 · ${_date(now)} ${_time(now)}',
+              style: const TextStyle(color: _Colors.muted),
+            ),
           ),
         if (trip != null)
           _card('이동 중 · ${_placeName(trip.destination)}', [
@@ -1038,7 +1061,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   }
 
   List<_MockRecord> _mockRecords() {
-    final now = widget.now ?? DateTime.now();
+    final now = _now;
     final records = <_MockRecord>[];
     for (var offset = 1; offset <= 60; offset++) {
       final day = DateTime(now.year, now.month, now.day - offset);
@@ -1247,6 +1270,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                   const Text(
                     '선택한 개수만큼 목록 앞에서부터 불러와요. 첫 세 루틴에 예시 일정과 기록이 있고, 나머지는 일정 미설정으로 표시돼요.',
                     style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      _mockExample(tripScenario: true);
+                      Navigator.pop(routeContext);
+                    },
+                    child: const Text('출발·도착 테스트'),
                   ),
                   const SizedBox(height: 16),
                   Text('장소 $_mockPlaceCount개'),

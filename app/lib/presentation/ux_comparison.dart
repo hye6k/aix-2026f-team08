@@ -167,6 +167,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
       SharedPreferences.getInstance();
 
   static const _platform = MethodChannel('morning_routine/platform');
+  static const _sleepGoalPreference = 'ux_sleep_goal_minutes';
+  int _sleepGoalMinutes = 480;
   static const _summaryPreference = 'ux_routine_summary_enabled';
   bool _summaryEnabled = false;
   bool _summaryReady = false;
@@ -260,6 +262,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
 
   Future<void> _load() async {
     try {
+      if (widget.persist) {
+        _sleepGoalMinutes =
+            (await _preferences).getInt(_sleepGoalPreference) ?? 480;
+      }
       final raw = widget.persist
           ? (await _preferences).getString('ux_location_draft_v1')
           : null;
@@ -1258,6 +1264,73 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
+  String get _sleepGoalLabel {
+    final hours = _sleepGoalMinutes ~/ 60;
+    final minutes = _sleepGoalMinutes % 60;
+    return minutes == 0 ? '$hours시간' : '$hours시간 $minutes분';
+  }
+
+  Future<void> _openSleepGoal() async {
+    var hours = _sleepGoalMinutes ~/ 60;
+    var minutes = _sleepGoalMinutes % 60;
+    final goal = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('수면 목표'),
+        content: Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                initialValue: hours,
+                decoration: const InputDecoration(labelText: '시간'),
+                items: [
+                  for (var hour = 1; hour < 24; hour++)
+                    DropdownMenuItem(value: hour, child: Text('$hour시간')),
+                ],
+                onChanged: (value) => hours = value ?? hours,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                initialValue: minutes,
+                decoration: const InputDecoration(labelText: '분'),
+                items: [
+                  for (var minute = 0; minute < 60; minute += 5)
+                    DropdownMenuItem(value: minute, child: Text('$minute분')),
+                ],
+                onChanged: (value) => minutes = value ?? minutes,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, hours * 60 + minutes),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+    if (goal == null || !mounted) return;
+    try {
+      if (widget.persist &&
+          !await (await _preferences).setInt(_sleepGoalPreference, goal)) {
+        throw StateError('저장 실패');
+      }
+      if (mounted) setState(() => _sleepGoalMinutes = goal);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('수면 목표를 저장하지 못했어요.')));
+      }
+    }
+  }
+
   Widget _settings() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -1278,8 +1351,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         trailing: const Icon(Icons.chevron_right),
         onTap: _openNotificationSettings,
       ),
+      ListTile(
+        leading: const Icon(Icons.bedtime_outlined),
+        title: const Text('수면 목표'),
+        subtitle: Text(_sleepGoalLabel),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _openSleepGoal,
+      ),
       for (final (icon, title, description) in const [
-        (Icons.bedtime_outlined, '수면 목표', '목표 수면 시간을 설정해요.'),
         (Icons.location_searching, '권한 및 감지 상태', '알림과 위치 권한, 자동 감지 상태를 확인해요.'),
       ])
         ListTile(

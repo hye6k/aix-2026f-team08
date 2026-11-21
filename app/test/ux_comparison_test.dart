@@ -203,13 +203,14 @@ void main() {
     await tapVisible('개발자 옵션');
     await tapVisible('대학생 예시 데이터 불러오기');
     expect(find.textContaining('까지 출발 권장'), findsOneWidget);
-    await tapVisible('출발 기록');
-    expect(find.text('도착 기록'), findsOneWidget);
+    expect(find.text('오늘 · 월요일'), findsOneWidget);
+    await tapVisible('출발했어요');
+    expect(find.textContaining('이동 중'), findsOneWidget);
+    expect(find.text('도착했어요'), findsOneWidget);
     expect(
       (await SharedPreferences.getInstance()).getString('ux_trip_records_v1'),
       isNull,
     );
-    expect(find.text('오늘 · 월요일'), findsOneWidget);
     await tapVisible('기록');
     expect(find.textContaining('예시 데이터 · 최근 60일'), findsOneWidget);
     expect(find.textContaining('오전 강의'), findsWidgets);
@@ -343,9 +344,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('08:25까지 출발 권장 · 평소 35분'), findsOneWidget);
-    await tester.tap(find.text('출발 기록'));
+    await tester.tap(find.text('출발했어요'));
     await tester.pumpAndSettle();
-    expect(find.text('도착 기록'), findsOneWidget);
+    expect(find.text('도착했어요'), findsOneWidget);
   });
 
   for (final scenario in [

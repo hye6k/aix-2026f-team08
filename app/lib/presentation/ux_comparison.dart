@@ -921,14 +921,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             child: Text('예시 데이터 사용 중', style: TextStyle(color: _Colors.muted)),
           ),
         if (trip != null)
-          _card('이동 중 · ${trip.name}', [
+          _card('이동 중 · ${_placeName(trip.destination)}', [
             Text('출발 ${_time(trip.departure)}'),
-            FilledButton(
+            OutlinedButton(
               onPressed: _tripSaving ? null : () => _recordTrip(),
-              child: const Text('도착 기록'),
+              child: const Text('도착했어요'),
             ),
-          ]),
-        if (active == null)
+          ])
+        else if (active == null)
           _card(
             _routines.isEmpty
                 ? '아침 루틴이 없어요'
@@ -982,26 +982,27 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                     fontSize: 16,
                   ),
                 ),
+                if (leaveAt != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${DateUtils.isSameDay(leaveAt, day) ? '' : '${leaveAt.month}/${leaveAt.day} '}${_time(leaveAt)}까지 출발 권장 · 평소 $travelMinutes분',
+                    style: const TextStyle(color: Color(0xffd5e6db)),
+                  ),
+                ],
+                if (showToday) ...[
+                  const SizedBox(height: 12),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Colors.white),
+                    onPressed: _tripSaving
+                        ? null
+                        : () => _recordTrip(routine: active),
+                    child: const Text('출발했어요'),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 16),
-          if (trip == null)
-            _card('이동', [
-              if (leaveAt != null)
-                Text(
-                  '${_date(leaveAt)} ${_time(leaveAt)}까지 출발 권장 · 평소 $travelMinutes분',
-                )
-              else
-                const Text('같은 경로의 이동 기록이 3건 쌓이면 출발 시각을 안내해요.'),
-              if (showToday)
-                FilledButton(
-                  onPressed: _tripSaving
-                      ? null
-                      : () => _recordTrip(routine: active),
-                  child: const Text('출발 기록'),
-                ),
-            ]),
           _card('기상 시간', [
             Text(
               active.wake == null
@@ -1305,7 +1306,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                             label: Text(entry.$2),
                             selected: _mockTodayStatus == entry.$1,
                             onSelected: (_) {
-                              setState(() => _mockTodayStatus = entry.$1);
+                              setState(() {
+                                _mockTodayStatus = entry.$1;
+                                if (_mockTodayStatus != 'pending') {
+                                  _mockTrips.removeWhere(
+                                    (trip) => trip.arrival == null,
+                                  );
+                                }
+                              });
                               refresh(() {});
                             },
                           ),

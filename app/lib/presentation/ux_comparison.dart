@@ -188,6 +188,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     with WidgetsBindingObserver {
   static const _tripPreference = 'ux_trip_records_v1';
   List<_Trip> _trips = [];
+  List<_Trip> _mockTrips = [];
+  List<_Trip> get _visibleTrips => _mockActive ? _mockTrips : _trips;
   bool _tripSaving = false;
   final _places = <_Place>[];
   final _routines = <_Routine>[];
@@ -642,6 +644,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     final later = DateTime(now.year, now.month, now.day + 2);
     setState(() {
       _mockActive = true;
+      _mockTrips = [];
       _recordMonth = null;
       _mockTodayStatus = 'pending';
       final places = <_Place>[
@@ -765,6 +768,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         ..addAll(_originalRoutines!);
       _nextId = _originalNextId!;
       _mockActive = false;
+      _mockTrips = [];
       _recordMonth = null;
       _originalPlaces = null;
       _originalRoutines = null;
@@ -772,17 +776,17 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     });
   }
 
-  _Trip? get _activeTrip => _mockActive
-      ? null
-      : _trips.where((trip) => trip.arrival == null).firstOrNull;
+  _Trip? get _activeTrip =>
+      _visibleTrips.where((trip) => trip.arrival == null).firstOrNull;
 
   Future<void> _recordTrip({_Routine? routine}) async {
-    if (_mockActive || _tripSaving) return;
+    if (_tripSaving) return;
+    final isMock = _mockActive;
     final active = _activeTrip;
     final now = widget.now ?? DateTime.now();
     if (active != null && !now.isAfter(active.departure)) return;
     if (active == null && routine == null) return;
-    final updated = [..._trips];
+    final updated = [..._visibleTrips];
     if (active != null) {
       updated[updated.indexOf(active)] = _Trip(
         active.routineId,
@@ -803,6 +807,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           null,
         ),
       );
+    }
+    if (isMock) {
+      setState(() => _mockTrips = updated);
+      return;
     }
     setState(() => _tripSaving = true);
     try {
@@ -825,16 +833,20 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   }
 
   int? _typicalTripMinutes(_Routine route) {
-    if (_mockActive) return null;
+    final durations = [
+      for (final trip in _visibleTrips.reversed)
+        if (trip.origin == route.origin &&
+            trip.destination == route.destination &&
+            trip.arrival != null)
+          trip.arrival!.difference(trip.departure).inSeconds,
+      if (_mockActive)
+        for (final record in _mockRecords())
+          if (record.routine.origin == route.origin &&
+              record.routine.destination == route.destination)
+            record.arrival.difference(record.departure).inSeconds,
+    ];
     final samples =
-        _trips.reversed
-            .where(
-              (trip) =>
-                  trip.origin == route.origin &&
-                  trip.destination == route.destination &&
-                  trip.arrival != null,
-            )
-            .map((trip) => trip.arrival!.difference(trip.departure).inSeconds)
+        durations
             .where((seconds) => seconds > 0 && seconds < 24 * 60 * 60)
             .take(5)
             .toList()
@@ -846,12 +858,13 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         .ceil();
   }
 
-  bool _completedTrip(_Routine route, DateTime day) => _trips.any(
-    (trip) =>
-        trip.routineId == route.id &&
-        trip.arrival != null &&
-        DateUtils.isSameDay(trip.departure, day),
-  );
+  bool _completedTrip(_Routine route, DateTime day, List<_Trip> trips) =>
+      trips.any(
+        (trip) =>
+            trip.routineId == route.id &&
+            trip.arrival != null &&
+            DateUtils.isSameDay(trip.departure, day),
+      );
 
   (_Routine?, DateTime) _homeRoutine(DateTime now, {bool useMock = true}) {
     final routines = !useMock && _mockActive ? _originalRoutines! : _routines;
@@ -859,8 +872,9 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         routines.where((r) => r.days.contains(day.weekday)).firstOrNull;
     final today = onDay(now);
     final done = useMock && _mockActive
-        ? _mockTodayStatus != 'pending'
-        : today != null && _completedTrip(today, now);
+        ? _mockTodayStatus != 'pending' ||
+              (today != null && _completedTrip(today, now, _mockTrips))
+        : today != null && _completedTrip(today, now, _trips);
     if (today != null && !done) return (today, now);
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     return (onDay(tomorrow), tomorrow);
@@ -972,7 +986,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             ),
           ),
           const SizedBox(height: 16),
-          if (!_mockActive && trip == null)
+          if (trip == null)
             _card('이동', [
               if (leaveAt != null)
                 Text(
@@ -1124,25 +1138,19 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             style: const TextStyle(color: _Colors.muted),
           ),
         const SizedBox(height: 14),
-        if (!_mockActive)
-          if (_trips.every((trip) => trip.arrival == null))
-            _card('아직 기록이 없어요', const [Text('홈에서 출발과 도착을 기록할 수 있어요.')])
-          else
-            for (final trip in _trips.reversed.where(
-              (trip) => trip.arrival != null,
-            ))
-              _card(trip.name, [
-                Text(_date(trip.departure)),
-                Text(
-                  '출발 ${_time(trip.departure)} · 도착 ${_time(trip.arrival!)}',
-                ),
-                Text(
-                  '이동 ${_duration(trip.arrival!.difference(trip.departure))}',
-                ),
-              ])
-        else if (records.isEmpty)
+        for (final trip in _visibleTrips.reversed.where(
+          (trip) => trip.arrival != null,
+        ))
+          _card(trip.name, [
+            Text(_date(trip.departure)),
+            Text('출발 ${_time(trip.departure)} · 도착 ${_time(trip.arrival!)}'),
+            Text('이동 ${_duration(trip.arrival!.difference(trip.departure))}'),
+          ]),
+        if (!_mockActive && _trips.every((trip) => trip.arrival == null))
+          _card('아직 기록이 없어요', const [Text('홈에서 출발과 도착을 기록할 수 있어요.')]),
+        if (_mockActive && records.isEmpty)
           _card('예시 기록이 없어요', const [Text('예시 루틴의 적용 요일을 확인해 주세요.')])
-        else ...[
+        else if (_mockActive) ...[
           Wrap(
             spacing: 8,
             children: [

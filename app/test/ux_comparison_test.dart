@@ -202,6 +202,13 @@ void main() {
     await tapVisible('설정');
     await tapVisible('개발자 옵션');
     await tapVisible('대학생 예시 데이터 불러오기');
+    expect(find.textContaining('까지 출발 권장'), findsOneWidget);
+    await tapVisible('출발 기록');
+    expect(find.text('도착 기록'), findsOneWidget);
+    expect(
+      (await SharedPreferences.getInstance()).getString('ux_trip_records_v1'),
+      isNull,
+    );
     expect(find.text('오늘 · 월요일'), findsOneWidget);
     await tapVisible('기록');
     expect(find.textContaining('예시 데이터 · 최근 60일'), findsOneWidget);

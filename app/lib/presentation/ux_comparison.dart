@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'location_picker.dart';
@@ -320,6 +321,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   @override
   void dispose() {
     _clockTimer?.cancel();
+    unawaited(_locationUpdates?.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -655,6 +657,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     final later = DateTime(now.year, now.month, now.day + 2);
     setState(() {
       _mockActive = true;
+      _observedOrigin = null;
       _mockTrips = [];
       _recordMonth = null;
       _mockTodayStatus = 'pending';
@@ -1479,20 +1482,126 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
-  void _showPendingSetting(String title, String description) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text('$description\n\n아직 사용할 수 없어요.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
+  StreamSubscription<Position>? _locationUpdates;
+  (int, int, int, DateTime)? _observedOrigin;
+  bool _startingLocation = false;
+
+  Future<void> _toggleLocationTracking() async {
+    if (_startingLocation) return;
+    if (_locationUpdates != null) {
+      final subscription = _locationUpdates;
+      setState(() {
+        _locationUpdates = null;
+        _observedOrigin = null;
+      });
+      await subscription?.cancel();
+      return;
+    }
+    setState(() => _startingLocation = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError('기기의 위치 서비스를 켜 주세요.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        throw StateError('Android 설정에서 위치 접근을 허용해 주세요.');
+      }
+      if (!mounted) return;
+      final subscription =
+          Geolocator.getPositionStream(
+            locationSettings: AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 30,
+              intervalDuration: const Duration(seconds: 15),
+              foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationTitle: '아침 루틴 위치 감지',
+                notificationText: '출발과 도착을 확인하고 있어요.',
+                notificationChannelName: '루틴 위치 감지',
+                setOngoing: true,
+              ),
+            ),
+          ).listen(
+            _onPosition,
+            onError: (Object error) {
+              if (!mounted) return;
+              unawaited(_toggleLocationTracking());
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('위치 감지가 중단됐어요. 위치 설정을 확인해 주세요.')),
+              );
+            },
+          );
+      setState(() => _locationUpdates = subscription);
+    } on StateError catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('위치 감지를 시작하지 못했어요.')));
+      }
+    } finally {
+      if (mounted) setState(() => _startingLocation = false);
+    }
+  }
+
+  void _onPosition(Position position) {
+    if (!mounted ||
+        _mockActive ||
+        _locationUpdates == null ||
+        _tripSaving ||
+        position.accuracy <= 0 ||
+        position.accuracy > 70) {
+      return;
+    }
+    final now = DateTime.now();
+    final trip = _activeTrip;
+    final (routine, day) = _homeRoutine(now, useMock: false);
+
+    double? distanceTo(int id) {
+      final place = _places.where((place) => place.id == id).firstOrNull;
+      final lat = place?.latitude;
+      final lng = place?.longitude;
+      if (lat == null || lng == null) return null;
+      return Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        lat,
+        lng,
+      );
+    }
+
+    if (trip != null) {
+      final distance = distanceTo(trip.destination);
+      if (distance != null && distance + position.accuracy <= 120) {
+        unawaited(_recordTrip());
+      }
+      return;
+    }
+    if (routine == null || !DateUtils.isSameDay(day, now)) {
+      _observedOrigin = null;
+      return;
+    }
+    final origin = distanceTo(routine.origin);
+    final destination = distanceTo(routine.destination);
+    if (origin == null || destination == null) return;
+    final key = (
+      routine.id,
+      routine.origin,
+      routine.destination,
+      DateUtils.dateOnly(day),
     );
+    if (origin + position.accuracy <= 120) {
+      _observedOrigin = key;
+    } else if (_observedOrigin == key && origin - position.accuracy >= 200) {
+      _observedOrigin = null;
+      unawaited(_recordTrip(routine: routine));
+    }
   }
 
   Future<void> _testBedtimeAlert(
@@ -1655,15 +1764,15 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         trailing: const Icon(Icons.chevron_right),
         onTap: _openSleepGoal,
       ),
-      for (final (icon, title, description) in const [
-        (Icons.location_searching, '권한 및 감지 상태', '알림과 위치 권한, 자동 감지 상태를 확인해요.'),
-      ])
-        ListTile(
-          leading: Icon(icon),
-          title: Text(title),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _showPendingSetting(title, description),
-        ),
+      SwitchListTile(
+        secondary: const Icon(Icons.location_searching),
+        title: const Text('출발·도착 자동 감지'),
+        subtitle: const Text('감지 중에는 Android 위치 알림이 표시돼요.'),
+        value: _locationUpdates != null,
+        onChanged: Platform.isAndroid && !_startingLocation
+            ? (_) => _toggleLocationTracking()
+            : null,
+      ),
       if (widget.developerOptions)
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 4),

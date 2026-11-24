@@ -333,6 +333,7 @@ void main() {
     await tester.tap(find.text('기록'));
     await tester.pumpAndSettle();
     expect(find.textContaining('출발 08:00 · 도착 08:00'), findsOneWidget);
+    expect(find.text('준비 40분'), findsOneWidget);
     expect(
       (await SharedPreferences.getInstance()).getString('ux_trip_records_v1'),
       isNull,

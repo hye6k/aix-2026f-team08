@@ -329,6 +329,10 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                     if (Build.VERSION.SDK_INT >= 33) activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
                     result.success(null)
                 }
+                "takeWakeConfirmationTime" -> {
+                    val wakeAt = requireNotNull(call.argument<Number>("wakeAt")).toLong()
+                    result.success(BedtimeReminders(context).confirmationTime(wakeAt))
+                }
                 "configureBedtimeReminders" -> {
                     BedtimeReminders(context).configure(requireNotNull(call.arguments as? String))
                     result.success(null)

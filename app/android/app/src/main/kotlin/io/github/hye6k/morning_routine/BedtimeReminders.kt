@@ -40,10 +40,19 @@ internal class BedtimeReminders(private val context: Context) {
 
     fun confirm(wakeAt: Long) {
         if (prefs.getLong("active", 0) != wakeAt) return
-        prefs.edit().putLong("confirmed", wakeAt).remove("active").apply()
+        prefs.edit()
+            .putLong("confirmed", wakeAt)
+            .putLong("confirmedAt", System.currentTimeMillis())
+            .remove("active")
+            .apply()
         notifications.cancel(CARD)
         refresh()
     }
+
+    fun confirmationTime(wakeAt: Long): Long? =
+        if (prefs.getLong("confirmed", 0) == wakeAt)
+            prefs.getLong("confirmedAt", 0).takeIf { it > 0 }
+        else null
 
     fun refresh(scheduleChanged: Boolean = false) {
         val alarm = operation(TICK, CARD)

@@ -116,8 +116,9 @@ class _Trip {
     this.destination,
     this.name,
     this.departure,
-    this.arrival,
-  );
+    this.arrival, {
+    this.wake,
+  });
 
   factory _Trip.fromJson(Map<String, dynamic> data) => _Trip(
     data['routineId'] as int,
@@ -128,6 +129,9 @@ class _Trip {
     data['arrival'] == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(data['arrival'] as int),
+    wake: data['wake'] == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(data['wake'] as int),
   );
 
   final int routineId;
@@ -136,6 +140,7 @@ class _Trip {
   final String name;
   final DateTime departure;
   final DateTime? arrival;
+  final DateTime? wake;
 
   Map<String, Object?> toJson() => {
     'routineId': routineId,
@@ -144,6 +149,7 @@ class _Trip {
     'name': name,
     'departure': departure.millisecondsSinceEpoch,
     'arrival': arrival?.millisecondsSinceEpoch,
+    'wake': wake?.millisecondsSinceEpoch,
   };
 }
 
@@ -797,6 +803,37 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   _Trip? get _activeTrip =>
       _visibleTrips.where((trip) => trip.arrival == null).firstOrNull;
 
+  Future<DateTime?> _confirmedWake(_Routine routine, DateTime departure) async {
+    if (_mockActive) {
+      return _scenarioStart?.subtract(const Duration(minutes: 40));
+    }
+    final wake = routine.wake;
+    if (!Platform.isAndroid || wake == null) return null;
+    final planned = DateTime(
+      departure.year,
+      departure.month,
+      departure.day,
+      wake.hour,
+      wake.minute,
+    );
+    try {
+      final millis = await _platform.invokeMethod<int>(
+        'takeWakeConfirmationTime',
+        {'wakeAt': planned.millisecondsSinceEpoch},
+      );
+      if (millis == null) return null;
+      final confirmed = DateTime.fromMillisecondsSinceEpoch(millis);
+      return DateUtils.isSameDay(confirmed, departure) &&
+              !confirmed.isAfter(departure)
+          ? confirmed
+          : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   Future<void> _recordTrip({_Routine? routine}) async {
     if (_tripSaving) return;
     final isMock = _mockActive;
@@ -804,34 +841,38 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     final now = _now;
     if (active != null && !now.isAfter(active.departure)) return;
     if (active == null && routine == null) return;
-    final updated = [..._visibleTrips];
-    if (active != null) {
-      updated[updated.indexOf(active)] = _Trip(
-        active.routineId,
-        active.origin,
-        active.destination,
-        active.name,
-        active.departure,
-        now,
-      );
-    } else if (routine != null) {
-      updated.add(
-        _Trip(
-          routine.id,
-          routine.origin,
-          routine.destination,
-          routine.name,
-          now,
-          null,
-        ),
-      );
-    }
-    if (isMock) {
-      setState(() => _mockTrips = updated);
-      return;
-    }
     setState(() => _tripSaving = true);
     try {
+      final updated = [..._visibleTrips];
+      if (active != null) {
+        updated[updated.indexOf(active)] = _Trip(
+          active.routineId,
+          active.origin,
+          active.destination,
+          active.name,
+          active.departure,
+          now,
+          wake: active.wake,
+        );
+      } else if (routine != null) {
+        final confirmed = await _confirmedWake(routine, now);
+        if (!mounted || isMock != _mockActive) return;
+        updated.add(
+          _Trip(
+            routine.id,
+            routine.origin,
+            routine.destination,
+            routine.name,
+            now,
+            null,
+            wake: confirmed,
+          ),
+        );
+      }
+      if (isMock) {
+        setState(() => _mockTrips = updated);
+        return;
+      }
       if (widget.persist &&
           !await (await _preferences).setString(
             _tripPreference,
@@ -1181,6 +1222,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           _card(trip.name, [
             Text(_date(trip.departure)),
             Text('출발 ${_time(trip.departure)} · 도착 ${_time(trip.arrival!)}'),
+            if (trip.wake case final wake?) ...[
+              Text('기상 ${_time(wake)}'),
+              Text('준비 ${_duration(trip.departure.difference(wake))}'),
+            ],
             Text('이동 ${_duration(trip.arrival!.difference(trip.departure))}'),
           ]),
         if (!_mockActive && _trips.every((trip) => trip.arrival == null))

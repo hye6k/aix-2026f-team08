@@ -287,7 +287,6 @@ void main() {
       MaterialApp(home: MorningConceptScreen(now: DateTime(2026, 11, 9, 8))),
     );
     await tester.pumpAndSettle();
-    expect(find.text('기상 알람은 아직 연결되지 않았어요.'), findsOneWidget);
     await tester.ensureVisible(find.text('기상 시간 정하기'));
     await tester.tap(find.text('기상 시간 정하기'));
     await tester.pumpAndSettle();

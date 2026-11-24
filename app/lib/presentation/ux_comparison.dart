@@ -227,6 +227,9 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   int _bedtimeLeadMinutes = 60;
   static const _summaryPreference = 'ux_routine_summary_enabled';
   bool _summaryEnabled = false;
+  static const _wakeAlarmPreference = 'ux_wake_alarm_enabled';
+  bool _wakeAlarmEnabled = false;
+  String? _wakeAlarmStatus;
   bool _summaryReady = false;
 
   Future<void> _syncRoutineSummary({bool readLaunch = false}) async {
@@ -239,22 +242,36 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         setState(() => _tab = 0);
       }
       final realRoutines = _mockActive ? _originalRoutines! : _routines;
+      final wakeRoutes = [
+        for (final route in realRoutines)
+          if (route.wake case final wake? when route.days.isNotEmpty)
+            {
+              'name': route.name,
+              'days': route.days.toList()..sort(),
+              'hour': wake.hour,
+              'minute': wake.minute,
+            },
+      ];
+      try {
+        final status = await _platform.invokeMethod<String>(
+          'configureRoutineWakeAlarm',
+          jsonEncode({'enabled': _wakeAlarmEnabled, 'routes': wakeRoutes}),
+        );
+        if (mounted && _wakeAlarmStatus != status) {
+          setState(() => _wakeAlarmStatus = status);
+        }
+      } on PlatformException {
+        if (mounted) setState(() => _wakeAlarmStatus = 'error');
+      } on MissingPluginException {
+        // The Android side can be older during development.
+      }
       await _platform.invokeMethod<void>(
         'configureBedtimeReminders',
         jsonEncode({
           'enabled': _summaryEnabled,
           'goalMinutes': _sleepGoalMinutes,
           'leadMinutes': _bedtimeLeadMinutes,
-          'routes': [
-            for (final route in realRoutines)
-              if (route.wake case final wake? when route.days.isNotEmpty)
-                {
-                  'name': route.name,
-                  'days': route.days.toList()..sort(),
-                  'hour': wake.hour,
-                  'minute': wake.minute,
-                },
-          ],
+          'routes': wakeRoutes,
         }),
       );
       final realPlaces = _mockActive ? _originalPlaces! : _places;
@@ -378,6 +395,8 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
               .map((value) => _Trip.fromJson(value as Map<String, dynamic>))
               .toList();
         }
+        _wakeAlarmEnabled =
+            (await _preferences).getBool(_wakeAlarmPreference) ?? false;
         _bedtimeLeadMinutes =
             (await _preferences).getInt(_bedtimeLeadPreference) ?? 60;
         _sleepGoalMinutes =
@@ -1220,10 +1239,16 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
               ),
             ],
             const SizedBox(height: 8),
-            const Text(
-              '기상 알람은 아직 연결되지 않았어요.',
-              style: TextStyle(color: _Colors.muted, fontSize: 13),
-            ),
+            if (!_mockActive &&
+                _wakeAlarmEnabled &&
+                (_wakeAlarmStatus == 'exact_required' ||
+                    _wakeAlarmStatus == 'permission_required'))
+              TextButton(
+                onPressed: _requestWakePermission,
+                child: const Text('기상 알람 권한 켜기'),
+              )
+            else if (!_mockActive && _wakeAlarmStatus == 'error')
+              const Text('기상 알람을 예약하지 못했어요.'),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
@@ -1440,6 +1465,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                     TextButton(
                       onPressed: _cancelDepartureVerification,
                       child: const Text('먼저 출발했다고 처리'),
+                    ),
+                    OutlinedButton(
+                      onPressed: _previewWakeAlarm,
+                      child: const Text('10초 뒤 기상 알람 테스트'),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -1868,23 +1897,95 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _requestWakePermission() async {
+    try {
+      final permissions = await _platform.invokeMapMethod<String, bool>(
+        'getPermissions',
+      );
+      if (!mounted || permissions == null) return;
+      if (permissions['notifications'] != true) {
+        await _platform.invokeMethod<void>('requestNotificationPermission');
+      } else if (permissions['exactAlarm'] != true) {
+        await _platform.invokeMethod<void>('requestExactAlarmPermission');
+      }
+    } on PlatformException {
+      if (mounted) setState(() => _wakeAlarmStatus = 'error');
+    } on MissingPluginException {
+      if (mounted) setState(() => _wakeAlarmStatus = 'error');
+    }
+  }
+
+  Future<void> _setWakeAlarm(bool enabled) async {
+    try {
+      if (!await (await _preferences).setBool(_wakeAlarmPreference, enabled) ||
+          !mounted) {
+        return;
+      }
+      setState(() => _wakeAlarmEnabled = enabled);
+      await _syncRoutineSummary();
+      if (enabled) await _requestWakePermission();
+    } catch (_) {
+      if (mounted) setState(() => _wakeAlarmStatus = 'error');
+    }
+  }
+
+  Future<void> _previewWakeAlarm() async {
+    var message = '기상 테스트 알람을 예약하지 못했어요.';
+    try {
+      final status = await _platform.invokeMethod<String>(
+        'scheduleRoutineWakePreview',
+      );
+      message = switch (status) {
+        'scheduled' => '10초 뒤 기상 알람이 울려요. 지금 화면을 잠가 보세요.',
+        'exact_required' => '정확한 알람 권한을 켠 뒤 테스트를 다시 눌러 주세요.',
+        'permission_required' => '앱 알림을 허용한 뒤 테스트를 다시 눌러 주세요.',
+        _ => message,
+      };
+    } on PlatformException {
+      // Show the failure below.
+    } on MissingPluginException {
+      message = 'Android 앱을 다시 빌드해 주세요.';
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   Future<void> _openNotificationSettings() async {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, refresh) => AlertDialog(
           title: const Text('알림'),
-          content: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('잠금화면·알림창 루틴 표시'),
-            subtitle: const Text('루틴 요약과 예약된 취침·출발 안내를 표시해요.'),
-            value: _summaryEnabled,
-            onChanged: _summaryReady
-                ? (value) async {
-                    await _setRoutineSummary(value);
-                    if (context.mounted) refresh(() {});
-                  }
-                : null,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('잠금화면·알림창 루틴 표시'),
+                subtitle: const Text('루틴 요약과 예약된 취침·출발 안내를 표시해요.'),
+                value: _summaryEnabled,
+                onChanged: _summaryReady
+                    ? (value) async {
+                        await _setRoutineSummary(value);
+                        if (context.mounted) refresh(() {});
+                      }
+                    : null,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('루틴 기상 알람'),
+                subtitle: const Text('루틴에 정한 시각에 기상 알람을 울려요.'),
+                value: _wakeAlarmEnabled,
+                onChanged: _summaryReady
+                    ? (value) async {
+                        await _setWakeAlarm(value);
+                        if (context.mounted) refresh(() {});
+                      }
+                    : null,
+              ),
+            ],
           ),
           actions: [
             if (widget.developerOptions && Platform.isAndroid)

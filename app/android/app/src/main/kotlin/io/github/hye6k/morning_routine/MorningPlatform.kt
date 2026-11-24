@@ -163,6 +163,8 @@ internal class MorningAlarms(private val context: Context) {
         if (permissionState().values.all { it }) return null
         return state().keys().asSequence().mapNotNull { readSlot(it) }.firstOrNull()
     }
+    fun currentSlot(id: String): AlarmSlot? = readSlot(id)
+
     fun isRinging(id: String, at: Long): Boolean {
         val value = state().optJSONObject(id) ?: return false
         return value.optLong("atMillis") == at && value.optString("state") == "ringing"
@@ -179,11 +181,15 @@ internal class MorningAlarms(private val context: Context) {
         }
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).setData(Uri.Builder().scheme("morning-routine").authority("open").appendPath(id).build()), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, channel) else Notification.Builder(context)
-        builder.setSmallIcon(R.drawable.ic_routine_notification).setContentTitle("기상 알람")
-            .setContentText("기상 확인은 앱에서 별도로 진행해 주세요.").setCategory(Notification.CATEGORY_ALARM)
+        val routineWake = RoutineWakeAlarm.owns(id)
+        builder.setSmallIcon(R.drawable.ic_routine_notification)
+            .setContentTitle(if (id == RoutineWakeAlarm.PREVIEW_ID) "기상 알람 테스트" else "기상 알람")
+            .setContentText(if (routineWake) "일어났다면 기상을 확인해 주세요." else "기상 확인은 앱에서 별도로 진행해 주세요.").setCategory(Notification.CATEGORY_ALARM)
             .setContentIntent(open).setOngoing(true)
-            .addAction(Notification.Action.Builder(null, "알람 해제", token(id, "dismiss", at)).build())
-            .addAction(Notification.Action.Builder(null, "5분 뒤 다시 울림", token(id, "snooze", at)).build())
+            .addAction(Notification.Action.Builder(null, if (routineWake) "기상 확인" else "알람 해제", token(id, "dismiss", at)).build())
+        if (!routineWake) {
+            builder.addAction(Notification.Action.Builder(null, "5분 뒤 다시 울림", token(id, "snooze", at)).build())
+        }
         if (Build.VERSION.SDK_INT < 26) {
             @Suppress("DEPRECATION")
             builder.setPriority(Notification.PRIORITY_MAX).setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)).setVibrate(longArrayOf(0, 1000, 500, 1000))
@@ -204,7 +210,14 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             if (intent.action != "fire" && !alarms.isRinging(id, intent.getLongExtra("atMillis", 0))) return
             when (intent.action) {
                 "fire" -> alarms.fire(id, intent.getLongExtra("atMillis", 0))
-                "dismiss" -> { alarms.cancel(id); MorningEvents.emit(context, "alarmDismissed", id) }
+                "dismiss" -> {
+                    alarms.cancel(id)
+                    if (id == RoutineWakeAlarm.ID) {
+                        BedtimeReminders(context).recordWakeConfirmation(intent.getLongExtra("atMillis", 0))
+                        RoutineWakeAlarm(context).refresh()
+                    }
+                    MorningEvents.emit(context, "alarmDismissed", id)
+                }
                 "snooze" -> {
                     val at = System.currentTimeMillis() + 5 * 60_000L
                     attemptedAt = at
@@ -353,6 +366,31 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                                 DepartureReminder(context, isTest = true).scheduleVerification()
                             else DepartureReminder(context).preview()
                         )
+                    }
+                }
+                "configureRoutineWakeAlarm" -> {
+                    val status = RoutineWakeAlarm(context).configure(requireNotNull(call.arguments as? String))
+                    result.success(status)
+                }
+                "scheduleRoutineWakePreview" -> {
+                    val permissions = alarms.permissionState()
+                    when {
+                        permissions["notifications"] != true -> {
+                            if (Build.VERSION.SDK_INT >= 33 &&
+                                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
+                            result.success("permission_required")
+                        }
+                        permissions["exactAlarm"] != true -> {
+                            if (Build.VERSION.SDK_INT >= 31) activity.startActivity(
+                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                            )
+                            result.success("exact_required")
+                        }
+                        else -> {
+                            alarms.schedule(RoutineWakeAlarm.PREVIEW_ID, System.currentTimeMillis() + 10_000)
+                            result.success("scheduled")
+                        }
                     }
                 }
                 "configureBedtimeReminders" -> {

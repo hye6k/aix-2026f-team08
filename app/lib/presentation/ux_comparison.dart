@@ -1103,6 +1103,13 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
               style: const TextStyle(color: _Colors.muted),
             ),
           ),
+        if (_locationIssue case final issue? when !_mockActive)
+          _card(issue, [
+            TextButton(
+              onPressed: _startingLocation ? null : _toggleLocationTracking,
+              child: const Text('위치 감지 다시 켜기'),
+            ),
+          ]),
         if (trip != null)
           _card('이동 중 · ${_placeName(trip.destination)}', [
             Row(
@@ -1421,6 +1428,19 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                       ),
                       child: const Text('10초 뒤 출발 알림 테스트'),
                     ),
+                    OutlinedButton(
+                      onPressed: () => _testBedtimeAlert(
+                        routeContext,
+                        delayed: true,
+                        departure: true,
+                        verifySchedule: true,
+                      ),
+                      child: const Text('출발 예약 검증 시작 (10초)'),
+                    ),
+                    TextButton(
+                      onPressed: _cancelDepartureVerification,
+                      child: const Text('먼저 출발했다고 처리'),
+                    ),
                     const SizedBox(height: 16),
                   ],
                   DropdownButtonFormField<int>(
@@ -1666,6 +1686,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   StreamSubscription<Position>? _locationUpdates;
   (int, int, int, DateTime)? _observedOrigin;
   bool _startingLocation = false;
+  String? _locationIssue;
 
   Future<void> _toggleLocationTracking() async {
     if (_startingLocation) return;
@@ -1709,20 +1730,28 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             _onPosition,
             onError: (Object error) {
               if (!mounted) return;
-              unawaited(_toggleLocationTracking());
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('위치 감지가 중단됐어요. 위치 설정을 확인해 주세요.')),
-              );
+              final failed = _locationUpdates;
+              setState(() {
+                _locationUpdates = null;
+                _observedOrigin = null;
+                _locationIssue = '위치 감지가 중단됐어요.';
+              });
+              unawaited(failed?.cancel());
             },
           );
-      setState(() => _locationUpdates = subscription);
+      setState(() {
+        _locationUpdates = subscription;
+        _locationIssue = null;
+      });
     } on StateError catch (error) {
       if (mounted) {
+        setState(() => _locationIssue = error.message);
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
       }
     } catch (_) {
       if (mounted) {
+        setState(() => _locationIssue = '위치 감지를 시작하지 못했어요.');
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('위치 감지를 시작하지 못했어요.')));
       }
@@ -1785,16 +1814,34 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     }
   }
 
+  Future<void> _cancelDepartureVerification() async {
+    var message = '테스트 출발 예약을 취소했어요.';
+    try {
+      await _platform.invokeMethod<void>('cancelDepartureVerification');
+    } on PlatformException {
+      message = '테스트 예약을 취소하지 못했어요.';
+    } on MissingPluginException {
+      message = 'Android 앱을 다시 빌드해 주세요.';
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   Future<void> _testBedtimeAlert(
     BuildContext dialogContext, {
     bool delayed = false,
     bool departure = false,
+    bool verifySchedule = false,
   }) async {
     String? status;
     String message;
     try {
       status = await _platform.invokeMethod<String>(
-        departure
+        verifySchedule
+            ? 'scheduleDepartureVerification'
+            : departure
             ? 'scheduleDeparturePreview'
             : delayed
             ? 'scheduleBedtimePreview'

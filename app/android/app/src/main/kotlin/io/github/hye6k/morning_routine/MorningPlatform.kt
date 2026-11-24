@@ -337,14 +337,22 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                     DepartureReminder(context).configure(requireNotNull(call.arguments as? String))
                     result.success(null)
                 }
-                "scheduleDeparturePreview" -> {
+                "cancelDepartureVerification" -> {
+                    DepartureReminder(context, isTest = true).cancelVerification()
+                    result.success(null)
+                }
+                "scheduleDeparturePreview", "scheduleDepartureVerification" -> {
                     if (Build.VERSION.SDK_INT >= 33 &&
                         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                     ) {
                         activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
                         result.success("permission_required")
                     } else {
-                        result.success(DepartureReminder(context).preview())
+                        result.success(
+                            if (call.method == "scheduleDepartureVerification")
+                                DepartureReminder(context, isTest = true).scheduleVerification()
+                            else DepartureReminder(context).preview()
+                        )
                     }
                 }
                 "configureBedtimeReminders" -> {

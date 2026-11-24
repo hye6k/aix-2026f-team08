@@ -17,10 +17,15 @@ import org.json.JSONObject
 import java.util.Calendar
 import java.util.Date
 
-internal class DepartureReminder(private val context: Context) {
-    private val prefs = context.getSharedPreferences("departure_reminder", Context.MODE_PRIVATE)
+internal class DepartureReminder(
+    private val context: Context,
+    private val isTest: Boolean = false,
+) {
+    private val prefs = context.getSharedPreferences(if (isTest) "departure_reminder_test" else "departure_reminder", Context.MODE_PRIVATE)
     private val alarms = context.getSystemService(AlarmManager::class.java)
     private val notifications = context.getSystemService(NotificationManager::class.java)
+
+    private val reminderId = if (isTest) TEST_ID else ID
 
     private data class Occurrence(val day: String, val at: Long, val destination: String)
 
@@ -36,7 +41,7 @@ internal class DepartureReminder(private val context: Context) {
             posted != null && settings.optJSONArray("departed")?.let { days ->
                 (0 until days.length()).any { days.getString(it) == posted }
             } == true
-        ) notifications.cancel(ID)
+        ) notifications.cancel(reminderId)
         refresh()
     }
 
@@ -60,26 +65,40 @@ internal class DepartureReminder(private val context: Context) {
     }
 
     fun refresh(deliver: Boolean = false) {
-        val pending = operation(TICK, ID)
+        val pending = operation(if (isTest) TEST_TICK else TICK, reminderId)
         alarms.cancel(pending)
         val scheduled = prefs.getLong("next", 0)
         prefs.edit().remove("next").apply()
         val config = JSONObject(prefs.getString("config", "{}") ?: "{}")
         if (!config.optBoolean("enabled")) return
-        val routes = config.optJSONArray("routes") ?: return
+        val routes = config.optJSONArray("routes")
         val departed = config.optJSONArray("departed")
         val posted = prefs.getString("postedDay", null)
         val now = System.currentTimeMillis()
         var next: Occurrence? = null
-        for (offset in 0..8) {
+        fun consider(occurrence: Occurrence) {
+            val at = occurrence.at
+            if (deliver && at == scheduled && now >= at && now - at <= 5 * 60_000L) {
+                if (post(occurrence.destination, at, reminderId)) {
+                    prefs.edit().putString("postedDay", occurrence.day).apply()
+                }
+            } else if (at > now && (next?.at ?: Long.MAX_VALUE) > at) {
+                next = occurrence
+            }
+        }
+        if (isTest) {
+            val at = config.optLong("testAt")
+            consider(Occurrence(at.toString(), at, "학교"))
+        }
+        for (offset in if (routes == null) IntRange.EMPTY else 0..8) {
             val day = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }
             val dayKey = "${day.get(Calendar.YEAR)}-${day.get(Calendar.MONTH) + 1}-${day.get(Calendar.DAY_OF_MONTH)}"
             if (dayKey == posted || departed?.let { days ->
                     (0 until days.length()).any { days.getString(it) == dayKey }
                 } == true) continue
             val weekday = (day.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
-            for (index in 0 until routes.length()) {
-                val route = routes.getJSONObject(index)
+            for (index in 0 until (routes?.length() ?: 0)) {
+                val route = routes!!.getJSONObject(index)
                 val days = route.getJSONArray("days")
                 if ((0 until days.length()).none { days.getInt(it) == weekday }) continue
                 val deadline = (day.clone() as Calendar).apply {
@@ -89,19 +108,12 @@ internal class DepartureReminder(private val context: Context) {
                     set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 val at = deadline - route.getInt("travelMinutes") * 60_000L
-                val occurrence = Occurrence(dayKey, at, route.getString("destination"))
-                if (deliver && at == scheduled && now >= at && now - at <= 5 * 60_000L) {
-                    if (post(occurrence.destination, at, ID)) {
-                        prefs.edit().putString("postedDay", dayKey).apply()
-                    }
-                } else if (at > now && (next == null || at < next.at)) {
-                    next = occurrence
-                }
+                consider(Occurrence(dayKey, at, route.getString("destination")))
             }
         }
-        if (next != null) {
-            schedule(AlarmManager.RTC_WAKEUP, next.at, pending)
-            prefs.edit().putLong("next", next.at).apply()
+        next?.let {
+            schedule(AlarmManager.RTC_WAKEUP, it.at, pending)
+            prefs.edit().putLong("next", it.at).apply()
         }
     }
 
@@ -111,6 +123,18 @@ internal class DepartureReminder(private val context: Context) {
             notifications.areNotificationsEnabled() &&
             (Build.VERSION.SDK_INT < 26 ||
                 notifications.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
+
+    fun scheduleVerification(): String {
+        if (!canNotify()) return "blocked"
+        configure(JSONObject().put("enabled", true)
+            .put("testAt", System.currentTimeMillis() + 10_000).toString())
+        return if (Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms())
+            "scheduled" else "scheduled_inexact"
+    }
+
+    fun cancelVerification() {
+        configure(JSONObject().put("enabled", false).toString())
+    }
 
     fun preview(): String {
         if (!canNotify()) return "blocked"
@@ -147,7 +171,7 @@ internal class DepartureReminder(private val context: Context) {
         val time = DateFormat.getTimeFormat(context).format(Date(at))
         notifications.notify(id, builder
             .setSmallIcon(R.drawable.ic_routine_notification)
-            .setContentTitle(if (id == PREVIEW_ID) "출발 안내 테스트" else "출발할 시간이에요")
+            .setContentTitle(if (id == PREVIEW_ID || isTest) "출발 안내 테스트" else "출발할 시간이에요")
             .setContentText("$destination · 권장 출발 $time")
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
@@ -158,8 +182,10 @@ internal class DepartureReminder(private val context: Context) {
 
     companion object {
         const val TICK = "io.github.hye6k.morning_routine.DEPARTURE_TICK"
+        const val TEST_TICK = "io.github.hye6k.morning_routine.DEPARTURE_TEST_TICK"
         const val PREVIEW = "io.github.hye6k.morning_routine.DEPARTURE_PREVIEW"
         private const val ID = 4830
+        private const val TEST_ID = 4832
         private const val PREVIEW_ID = 4831
         private const val CHANNEL = "departure_reminder"
     }
@@ -170,6 +196,7 @@ class DepartureReminderReceiver : BroadcastReceiver() {
         val reminder = DepartureReminder(context)
         when (intent.action) {
             DepartureReminder.PREVIEW -> reminder.showPreview()
+            DepartureReminder.TEST_TICK -> DepartureReminder(context, isTest = true).refresh(deliver = true)
             DepartureReminder.TICK -> reminder.refresh(deliver = true)
             else -> reminder.refresh()
         }

@@ -1470,6 +1470,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                       onPressed: _previewWakeAlarm,
                       child: const Text('10초 뒤 기상 알람 테스트'),
                     ),
+                    TextButton(
+                      onPressed: _openWakeScreenPermission,
+                      child: const Text('기상 알람 전체 화면 권한'),
+                    ),
                     const SizedBox(height: 16),
                   ],
                   DropdownButtonFormField<int>(
@@ -1926,6 +1930,25 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
       if (enabled) await _requestWakePermission();
     } catch (_) {
       if (mounted) setState(() => _wakeAlarmStatus = 'error');
+    }
+  }
+
+  Future<void> _openWakeScreenPermission() async {
+    var message = '전체 화면 권한 설정을 열지 못했어요.';
+    try {
+      final result = await _platform.invokeMethod<String>(
+        'openWakeScreenPermission',
+      );
+      if (result == 'opened') return;
+      if (result == 'allowed') message = '전체 화면 기상 알람을 사용할 수 있어요.';
+    } on PlatformException {
+      // Show the failure below.
+    } on MissingPluginException {
+      message = 'Android 앱을 다시 빌드해 주세요.';
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 

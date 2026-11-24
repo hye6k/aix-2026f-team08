@@ -187,6 +187,22 @@ internal class MorningAlarms(private val context: Context) {
             .setContentText(if (routineWake) "일어났다면 기상을 확인해 주세요." else "기상 확인은 앱에서 별도로 진행해 주세요.").setCategory(Notification.CATEGORY_ALARM)
             .setContentIntent(open).setOngoing(true)
             .addAction(Notification.Action.Builder(null, if (routineWake) "기상 확인" else "알람 해제", token(id, "dismiss", at)).build())
+        if (routineWake) {
+            val screen = PendingIntent.getActivity(
+                context, 0,
+                Intent(context, WakeAlarmActivity::class.java)
+                    .setData(Uri.Builder().scheme("morning-routine").authority("wake-screen")
+                        .appendPath(id).appendPath(at.toString()).build())
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra("alarmId", id)
+                    .putExtra("atMillis", at),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.setVisibility(Notification.VISIBILITY_PUBLIC).setContentIntent(screen)
+            if (Build.VERSION.SDK_INT < 34 || notifications.canUseFullScreenIntent()) {
+                builder.setFullScreenIntent(screen, true)
+            }
+        }
         if (!routineWake) {
             builder.addAction(Notification.Action.Builder(null, "5분 뒤 다시 울림", token(id, "snooze", at)).build())
         }
@@ -371,6 +387,17 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                 "configureRoutineWakeAlarm" -> {
                     val status = RoutineWakeAlarm(context).configure(requireNotNull(call.arguments as? String))
                     result.success(status)
+                }
+                "openWakeScreenPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 34 &&
+                        !context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+                    ) {
+                        activity.startActivity(Intent(
+                            Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                            Uri.parse("package:${context.packageName}")
+                        ))
+                        result.success("opened")
+                    } else result.success("allowed")
                 }
                 "scheduleRoutineWakePreview" -> {
                     val permissions = alarms.permissionState()

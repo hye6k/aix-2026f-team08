@@ -66,7 +66,7 @@ class WakeAlarmActivity : Activity() {
             gravity = Gravity.CENTER
         }
         timePanel.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ic_routine_notification)
+            setImageResource(R.drawable.ic_routine_sunrise)
             imageTintList = ColorStateList.valueOf(amber)
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(32), dp(32)))

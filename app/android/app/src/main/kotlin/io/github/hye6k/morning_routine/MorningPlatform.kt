@@ -111,7 +111,7 @@ internal class MorningAlarms(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, candidateChannel) else Notification.Builder(context)
         notifications.notify("wake-candidate", 1, builder
-            .setSmallIcon(R.drawable.ic_routine_notification)
+            .setSmallIcon(R.drawable.ic_routine_sunrise)
             .setContentTitle("기상 여부를 확인해 주세요")
             .setContentText("화면 활동이 감지됐어요. 앱에서 확인하거나 취소해 주세요.")
             .setCategory(Notification.CATEGORY_REMINDER)
@@ -182,7 +182,7 @@ internal class MorningAlarms(private val context: Context) {
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).setData(Uri.Builder().scheme("morning-routine").authority("open").appendPath(id).build()), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, channel) else Notification.Builder(context)
         val routineWake = RoutineWakeAlarm.owns(id)
-        builder.setSmallIcon(R.drawable.ic_routine_notification)
+        builder.setSmallIcon(R.drawable.ic_routine_sunrise)
             .setContentTitle(if (id == RoutineWakeAlarm.PREVIEW_ID) "기상 알람 테스트" else "기상 알람")
             .setContentText(if (routineWake) "일어났다면 기상을 확인해 주세요." else "기상 확인은 앱에서 별도로 진행해 주세요.").setCategory(Notification.CATEGORY_ALARM)
             .setContentIntent(open).setOngoing(true)
@@ -301,7 +301,7 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
         )
         manager.notify(
             summaryId,
-            builder.setSmallIcon(R.drawable.ic_routine_notification)
+            builder.setSmallIcon(R.drawable.ic_routine_sunrise)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))

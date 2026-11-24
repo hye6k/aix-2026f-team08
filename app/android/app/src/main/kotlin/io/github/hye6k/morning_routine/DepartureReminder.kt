@@ -170,7 +170,7 @@ internal class DepartureReminder(
         )
         val time = DateFormat.getTimeFormat(context).format(Date(at))
         notifications.notify(id, builder
-            .setSmallIcon(R.drawable.ic_routine_notification)
+            .setSmallIcon(R.drawable.ic_routine_sunrise)
             .setContentTitle(if (id == PREVIEW_ID || isTest) "출발 안내 테스트" else "출발할 시간이에요")
             .setContentText("$destination · 권장 출발 $time")
             .setVisibility(Notification.VISIBILITY_PUBLIC)

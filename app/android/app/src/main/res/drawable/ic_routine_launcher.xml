@@ -4,5 +4,8 @@
     <path android:fillColor="#1B2542"
         android:pathData="M54,0 A54,54 0,1 1,54 108 A54,54 0,1 1,54 0Z"/>
     <path android:fillColor="#FFDC8C"
-        android:pathData="M57,26 C39,26 26,39 26,56 C26,73 39,85 56,85 C69,85 80,77 84,66 C69,73 51,62 51,45 C51,37 54,31 57,26Z M76,25 L78,32 L85,34 L78,36 L76,43 L74,36 L67,34 L74,32Z"/>
+        android:pathData="M31,63 A23,23 0,0 1,77 63 Z"/>
+    <path android:strokeColor="#FFDC8C" android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M25,71 H83 M36,80 H72 M54,23 V30 M27,34 L32,39 M81,34 L76,39"/>
 </vector>

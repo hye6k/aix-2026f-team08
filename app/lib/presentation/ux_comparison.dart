@@ -257,6 +257,39 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           ],
         }),
       );
+      final realPlaces = _mockActive ? _originalPlaces! : _places;
+      final departureRoutes = <Map<String, Object>>[];
+      for (final route in realRoutines.where(
+        (route) => route.days.isNotEmpty,
+      )) {
+        final travelMinutes = _typicalTripMinutes(route, useMock: false);
+        if (travelMinutes == null) continue;
+        final destination = realPlaces
+            .where((place) => place.id == route.destination)
+            .firstOrNull;
+        if (destination == null) continue;
+        departureRoutes.add({
+          'days': route.days.toList()..sort(),
+          'hour': route.deadline.hour,
+          'minute': route.deadline.minute,
+          'travelMinutes': travelMinutes,
+          'destination': destination.name,
+        });
+      }
+      final today = DateUtils.dateOnly(DateTime.now());
+      await _platform.invokeMethod<void>(
+        'configureDepartureReminder',
+        jsonEncode({
+          'enabled': _summaryEnabled,
+          'routes': departureRoutes,
+          'departed': [
+            if (_trips.any(
+              (trip) => DateUtils.isSameDay(trip.departure, today),
+            ))
+              '${today.year}-${today.month}-${today.day}',
+          ],
+        }),
+      );
       final now = DateTime.now();
       final (routine, day) = _homeRoutine(now, useMock: false);
       if (!_summaryEnabled || routine == null) {
@@ -902,7 +935,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
         )) {
       throw StateError('저장 실패');
     }
-    if (mounted) setState(() => _trips = trips);
+    if (mounted) {
+      setState(() => _trips = trips);
+      await _syncRoutineSummary();
+    }
   }
 
   Future<void> _toggleTripExclusion(_Trip trip) async {
@@ -933,9 +969,13 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     }
   }
 
-  int? _typicalTripMinutes(_Routine route, {bool preparation = false}) {
+  int? _typicalTripMinutes(
+    _Routine route, {
+    bool preparation = false,
+    bool useMock = true,
+  }) {
     final durations = [
-      for (final trip in _visibleTrips.reversed)
+      for (final trip in (useMock ? _visibleTrips : _trips).reversed)
         if (!trip.excluded &&
             trip.origin == route.origin &&
             trip.destination == route.destination &&
@@ -944,7 +984,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             trip.arrival!.difference(trip.departure).inSeconds
           else if (trip.wake case final wake?)
             trip.departure.difference(wake).inSeconds,
-      if (_mockActive)
+      if (_mockActive && useMock)
         for (final record in _mockRecords())
           if (record.routine.origin == route.origin &&
               record.routine.destination == route.destination)
@@ -1373,6 +1413,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                           _testBedtimeAlert(routeContext, delayed: true),
                       child: const Text('10초 뒤 취침 알림 테스트'),
                     ),
+                    OutlinedButton(
+                      onPressed: () => _testBedtimeAlert(
+                        routeContext,
+                        delayed: true,
+                        departure: true,
+                      ),
+                      child: const Text('10초 뒤 출발 알림 테스트'),
+                    ),
                     const SizedBox(height: 16),
                   ],
                   DropdownButtonFormField<int>(
@@ -1740,19 +1788,26 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
   Future<void> _testBedtimeAlert(
     BuildContext dialogContext, {
     bool delayed = false,
+    bool departure = false,
   }) async {
     String? status;
     String message;
     try {
       status = await _platform.invokeMethod<String>(
-        delayed ? 'scheduleBedtimePreview' : 'showBedtimePreview',
+        departure
+            ? 'scheduleDeparturePreview'
+            : delayed
+            ? 'scheduleBedtimePreview'
+            : 'showBedtimePreview',
       );
       message = switch (status) {
-        'scheduled' => '10초 뒤에 취침 알림이 와요. 지금 화면을 잠가 보세요.',
+        'scheduled' =>
+          '10초 뒤에 ${departure ? '출발' : '취침'} 알림이 와요. 지금 화면을 잠가 보세요.',
         'scheduled_inexact' => '10초 뒤로 예약했어요. 정확한 알람 권한이 없어 조금 늦을 수 있어요.',
         'posted' => '테스트 알림을 보냈어요. 상단 배너나 알림창을 확인해 주세요.',
         'permission_required' => '알림 권한을 허용한 뒤 테스트를 다시 눌러 주세요.',
-        'blocked' => 'Android 설정에서 앱 알림과 취침 알림 테스트 채널을 켜 주세요.',
+        'blocked' =>
+          'Android 설정에서 앱 알림과 ${departure ? '출발 안내' : '취침 알림 테스트'} 채널을 켜 주세요.',
         _ => '테스트 알림을 보내지 못했어요.',
       };
     } on PlatformException {
@@ -1775,7 +1830,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           content: SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('잠금화면·알림창 루틴 표시'),
-            subtitle: const Text('루틴 요약과 예약된 취침 안내를 표시해요.'),
+            subtitle: const Text('루틴 요약과 예약된 취침·출발 안내를 표시해요.'),
             value: _summaryEnabled,
             onChanged: _summaryReady
                 ? (value) async {

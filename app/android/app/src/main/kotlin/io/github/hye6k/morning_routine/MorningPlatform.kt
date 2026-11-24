@@ -333,6 +333,20 @@ internal class MorningPlatform(private val activity: Activity, messenger: Binary
                     val wakeAt = requireNotNull(call.argument<Number>("wakeAt")).toLong()
                     result.success(BedtimeReminders(context).confirmationTime(wakeAt))
                 }
+                "configureDepartureReminder" -> {
+                    DepartureReminder(context).configure(requireNotNull(call.arguments as? String))
+                    result.success(null)
+                }
+                "scheduleDeparturePreview" -> {
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 208)
+                        result.success("permission_required")
+                    } else {
+                        result.success(DepartureReminder(context).preview())
+                    }
+                }
                 "configureBedtimeReminders" -> {
                     BedtimeReminders(context).configure(requireNotNull(call.arguments as? String))
                     result.success(null)

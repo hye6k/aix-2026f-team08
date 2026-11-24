@@ -118,6 +118,7 @@ class _Trip {
     this.departure,
     this.arrival, {
     this.wake,
+    this.excluded = false,
   });
 
   factory _Trip.fromJson(Map<String, dynamic> data) => _Trip(
@@ -129,6 +130,7 @@ class _Trip {
     data['arrival'] == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(data['arrival'] as int),
+    excluded: data['excluded'] == true,
     wake: data['wake'] == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(data['wake'] as int),
@@ -141,6 +143,7 @@ class _Trip {
   final DateTime departure;
   final DateTime? arrival;
   final DateTime? wake;
+  final bool excluded;
 
   Map<String, Object?> toJson() => {
     'routineId': routineId,
@@ -150,6 +153,7 @@ class _Trip {
     'departure': departure.millisecondsSinceEpoch,
     'arrival': arrival?.millisecondsSinceEpoch,
     'wake': wake?.millisecondsSinceEpoch,
+    'excluded': excluded,
   };
 }
 
@@ -650,14 +654,20 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
       widget.now ??
       DateTime.now();
 
-  void _mockExample({bool rest = false, bool tripScenario = false}) {
+  void _mockExample({
+    bool rest = false,
+    bool tripScenario = false,
+    bool evening = false,
+  }) {
     if (!_mockActive) {
       _originalPlaces = [..._places];
       _originalRoutines = [..._routines];
       _originalNextId = _nextId;
     }
     // Only the mock UI uses this clock; Android scheduling uses device time.
-    _scenarioStart = tripScenario ? DateTime(2026, 11, 9, 8) : null;
+    _scenarioStart = tripScenario
+        ? (evening ? DateTime(2026, 11, 8, 22) : DateTime(2026, 11, 9, 8))
+        : null;
     _scenarioClock = tripScenario ? (Stopwatch()..start()) : null;
     final now = _now;
     final later = DateTime(now.year, now.month, now.day + 2);
@@ -869,18 +879,7 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
           ),
         );
       }
-      if (isMock) {
-        setState(() => _mockTrips = updated);
-        return;
-      }
-      if (widget.persist &&
-          !await (await _preferences).setString(
-            _tripPreference,
-            jsonEncode(updated.map((trip) => trip.toJson()).toList()),
-          )) {
-        throw StateError('저장 실패');
-      }
-      if (mounted) setState(() => _trips = updated);
+      await _saveTrips(updated, isMock: isMock);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -891,18 +890,67 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     }
   }
 
-  int? _typicalTripMinutes(_Routine route) {
+  Future<void> _saveTrips(List<_Trip> trips, {required bool isMock}) async {
+    if (isMock) {
+      setState(() => _mockTrips = trips);
+      return;
+    }
+    if (widget.persist &&
+        !await (await _preferences).setString(
+          _tripPreference,
+          jsonEncode(trips.map((trip) => trip.toJson()).toList()),
+        )) {
+      throw StateError('저장 실패');
+    }
+    if (mounted) setState(() => _trips = trips);
+  }
+
+  Future<void> _toggleTripExclusion(_Trip trip) async {
+    if (_tripSaving) return;
+    final trips = [..._visibleTrips];
+    final index = trips.indexOf(trip);
+    if (index < 0) return;
+    trips[index] = _Trip(
+      trip.routineId,
+      trip.origin,
+      trip.destination,
+      trip.name,
+      trip.departure,
+      trip.arrival,
+      wake: trip.wake,
+      excluded: !trip.excluded,
+    );
+    setState(() => _tripSaving = true);
+    try {
+      await _saveTrips(trips, isMock: _mockActive);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('추천 설정을 저장하지 못했어요.')));
+      }
+    } finally {
+      if (mounted) setState(() => _tripSaving = false);
+    }
+  }
+
+  int? _typicalTripMinutes(_Routine route, {bool preparation = false}) {
     final durations = [
       for (final trip in _visibleTrips.reversed)
-        if (trip.origin == route.origin &&
+        if (!trip.excluded &&
+            trip.origin == route.origin &&
             trip.destination == route.destination &&
             trip.arrival != null)
-          trip.arrival!.difference(trip.departure).inSeconds,
+          if (!preparation)
+            trip.arrival!.difference(trip.departure).inSeconds
+          else if (trip.wake case final wake?)
+            trip.departure.difference(wake).inSeconds,
       if (_mockActive)
         for (final record in _mockRecords())
           if (record.routine.origin == route.origin &&
               record.routine.destination == route.destination)
-            record.arrival.difference(record.departure).inSeconds,
+            preparation
+                ? record.departure.difference(record.wake).inSeconds
+                : record.arrival.difference(record.departure).inSeconds,
     ];
     final samples =
         durations
@@ -973,6 +1021,23 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     final wakeAt = wake == null
         ? null
         : DateTime(day.year, day.month, day.day, wake.hour, wake.minute);
+    final prepareMinutes = active == null
+        ? null
+        : _typicalTripMinutes(active, preparation: true);
+    final suggestedWake = leaveAt == null || prepareMinutes == null
+        ? null
+        : leaveAt.subtract(Duration(minutes: prepareMinutes));
+    final showWakeSuggestion =
+        suggestedWake != null &&
+        suggestedWake.isAfter(now) &&
+        (wakeAt == null || suggestedWake.isBefore(wakeAt));
+    final sleepWake = showWakeSuggestion ? suggestedWake : wakeAt;
+    final bedtime = sleepWake?.subtract(Duration(minutes: _sleepGoalMinutes));
+    final night =
+        (now.hour >= 18 || now.hour < 4) &&
+        sleepWake != null &&
+        sleepWake.isAfter(now) &&
+        bedtime != null;
     final remaining = wakeAt?.difference(now);
     final minutes = remaining == null ? 0 : (remaining.inSeconds / 60).ceil();
     final duration =
@@ -1057,7 +1122,11 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  leaveAt == null
+                  night
+                      ? (bedtime.isAfter(now)
+                            ? '${_time(bedtime)} 취침 권장'
+                            : '지금 취침 권장')
+                      : leaveAt == null
                       ? '${active.deadline.format(context)}까지 도착'
                       : '${DateUtils.isSameDay(leaveAt, day) ? '' : '${leaveAt.month}/${leaveAt.day} '}${_time(leaveAt)}까지 출발 권장',
                   style: const TextStyle(
@@ -1068,7 +1137,9 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  leaveAt == null
+                  night
+                      ? '${_time(sleepWake)} 기상${showWakeSuggestion ? ' 권장' : ''} · ${_placeName(active.destination)}'
+                      : leaveAt == null
                       ? _placeName(active.destination)
                       : '${_placeName(active.destination)} · ${active.deadline.format(context)}까지 도착',
                   style: const TextStyle(
@@ -1087,6 +1158,11 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                   : '${active.wake!.format(context)}에 일어나기',
               style: const TextStyle(fontSize: 16),
             ),
+            if (showWakeSuggestion && !night)
+              Text(
+                '${_time(suggestedWake)} 기상 권장 · 평소 준비 $prepareMinutes분',
+                style: const TextStyle(color: _Colors.muted),
+              ),
             if (remaining != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -1227,6 +1303,10 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
               Text('준비 ${_duration(trip.departure.difference(wake))}'),
             ],
             Text('이동 ${_duration(trip.arrival!.difference(trip.departure))}'),
+            TextButton(
+              onPressed: _tripSaving ? null : () => _toggleTripExclusion(trip),
+              child: Text(trip.excluded ? '추천에 다시 포함' : '추천에서 제외'),
+            ),
           ]),
         if (!_mockActive && _trips.every((trip) => trip.arrival == null))
           _card('아직 기록이 없어요', const [Text('홈에서 출발과 도착을 기록할 수 있어요.')]),
@@ -1336,6 +1416,14 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
                       Navigator.pop(routeContext);
                     },
                     child: const Text('출발·도착 테스트'),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      _mockExample(tripScenario: true, evening: true);
+                      Navigator.pop(routeContext);
+                    },
+                    child: const Text('저녁 취침 안내 테스트'),
                   ),
                   const SizedBox(height: 16),
                   Text('장소 $_mockPlaceCount개'),

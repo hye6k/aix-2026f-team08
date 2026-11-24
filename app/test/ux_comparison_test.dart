@@ -338,12 +338,20 @@ void main() {
       (await SharedPreferences.getInstance()).getString('ux_trip_records_v1'),
       isNull,
     );
+    for (final label in ['설정', '개발자 옵션', '저녁 취침 안내 테스트']) {
+      final target = find.text(label).last;
+      await tester.ensureVisible(target);
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('내일 · 월요일'), findsOneWidget);
+    expect(find.text('23:00 취침 권장'), findsOneWidget);
   });
 
   testWidgets('같은 경로의 기록 3건으로 출발 시각을 계산한다', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 950));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final morning = DateTime(2026, 11, 9, 8);
+    final morning = DateTime(2026, 11, 9, 7, 30);
     SharedPreferences.setMockInitialValues({
       'ux_location_draft_v1': jsonEncode({
         'nextId': 3,
@@ -360,6 +368,8 @@ void main() {
             'hour': 9,
             'minute': 0,
             'days': [1],
+            'wakeHour': 8,
+            'wakeMinute': 0,
           },
         ],
       }),
@@ -370,6 +380,7 @@ void main() {
             'name': '등교',
             'origin': 0,
             'destination': 1,
+            'wake': DateTime(2026, 11, day, 7, 20).millisecondsSinceEpoch,
             'departure': DateTime(2026, 11, day, 8).millisecondsSinceEpoch,
             'arrival': DateTime(
               2026,
@@ -386,6 +397,22 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('08:25까지 출발 권장'), findsOneWidget);
+    expect(find.text('07:45 기상 권장 · 평소 준비 40분'), findsOneWidget);
+    await tester.tap(find.text('기록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('추천에서 제외').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('홈'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('까지 출발 권장'), findsNothing);
+    await tester.tap(find.text('기록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('추천에 다시 포함'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('홈'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('08:25까지 출발 권장'), findsOneWidget);
+
     await tester.tap(find.byTooltip('이동 기록 더보기'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('출발했어요'));

@@ -19,15 +19,17 @@ internal class RoutineWakeAlarm(private val context: Context) {
         val config = JSONObject(prefs.getString("config", "{}") ?: "{}")
         val routes = config.optJSONArray("routes")
         if (!config.optBoolean("enabled") || routes == null || routes.length() == 0) {
-            alarms.cancel(ID)
+            SLOT_IDS.forEach(alarms::cancel)
             return "off"
         }
         val permissions = alarms.permissionState()
         if (permissions["exactAlarm"] != true) return "exact_required"
         if (permissions["notifications"] != true) return "permission_required"
         val now = System.currentTimeMillis()
-        val existing = alarms.currentSlot(ID)
-        if (existing?.state == "ringing" && !force) return "scheduled"
+        val slotId = SLOT_IDS.firstOrNull { alarms.currentSlot(it)?.state == "scheduled" }
+            ?: SLOT_IDS.firstOrNull { alarms.currentSlot(it)?.state != "ringing" }
+            ?: return "scheduled"
+        val existing = alarms.currentSlot(slotId)
         val next = (0..7).firstNotNullOfOrNull { offset ->
             val day = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }
             val weekday = (day.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
@@ -46,15 +48,25 @@ internal class RoutineWakeAlarm(private val context: Context) {
                 }
             }
         } ?: return "off"
-        if (force && existing != null) alarms.cancel(ID)
-        if (force || existing?.atMillis != next) alarms.schedule(ID, next)
+        if (force || existing?.atMillis != next) alarms.schedule(slotId, next)
         return "scheduled"
     }
 
+    fun afterFire(id: String, at: Long) {
+        if (!isRoutine(id) || !alarms.isRinging(id, at)) return
+        for (other in SLOT_IDS) {
+            if (other != id && alarms.currentSlot(other)?.state == "ringing") {
+                alarms.cancel(other)
+            }
+        }
+        refresh()
+    }
+
     companion object {
-        const val ID = "ux-routine-wake"
+        private val SLOT_IDS = listOf("ux-routine-wake", "ux-routine-wake-next")
         const val PREVIEW_ID = "ux-routine-wake-preview"
-        fun owns(id: String) = id == ID || id == PREVIEW_ID
+        fun isRoutine(id: String) = id in SLOT_IDS
+        fun owns(id: String) = isRoutine(id) || id == PREVIEW_ID
     }
 }
 

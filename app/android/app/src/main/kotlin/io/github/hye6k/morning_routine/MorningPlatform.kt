@@ -225,12 +225,15 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         try {
             if (intent.action != "fire" && !alarms.isRinging(id, intent.getLongExtra("atMillis", 0))) return
             when (intent.action) {
-                "fire" -> alarms.fire(id, intent.getLongExtra("atMillis", 0))
+                "fire" -> {
+                    val at = intent.getLongExtra("atMillis", 0)
+                    alarms.fire(id, at)
+                    if (RoutineWakeAlarm.isRoutine(id)) RoutineWakeAlarm(context).afterFire(id, at)
+                }
                 "dismiss" -> {
                     alarms.cancel(id)
-                    if (id == RoutineWakeAlarm.ID) {
+                    if (RoutineWakeAlarm.isRoutine(id)) {
                         BedtimeReminders(context).recordWakeConfirmation(intent.getLongExtra("atMillis", 0))
-                        RoutineWakeAlarm(context).refresh()
                     }
                     MorningEvents.emit(context, "alarmDismissed", id)
                 }

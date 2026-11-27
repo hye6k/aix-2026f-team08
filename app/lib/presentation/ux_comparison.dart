@@ -1333,6 +1333,194 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
     );
   }
 
+  Future<void> _editTrip([_Trip? existing]) async {
+    if (_tripSaving) return;
+    final isMock = _mockActive;
+    final today = DateUtils.dateOnly(_now);
+    var day = DateUtils.dateOnly(existing?.departure ?? today);
+    var routine = _routines.firstOrNull;
+    var departureText = existing == null ? '' : _time(existing.departure);
+    var arrivalText = existing?.arrival == null
+        ? ''
+        : _time(existing!.arrival!);
+    String? error;
+
+    DateTime? parse(String text, DateTime date) {
+      final match = RegExp(r'^([0-9]{1,2}):([0-9]{2})$')
+          .firstMatch(text.trim());
+      if (match == null) return null;
+      final hour = int.parse(match[1]!);
+      final minute = int.parse(match[2]!);
+      if (hour > 23 || minute > 59) return null;
+      return DateTime(date.year, date.month, date.day, hour, minute);
+    }
+
+    final result = await showDialog<_Trip>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refresh) => AlertDialog(
+          title: Text(existing == null ? '이동 기록 추가' : '이동 시각 수정'),
+          scrollable: true,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (existing == null) ...[
+                DropdownButtonFormField<int>(
+                  initialValue: routine?.id,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: '루틴'),
+                  items: [
+                    for (final route in _routines)
+                      DropdownMenuItem(
+                        value: route.id,
+                        child: Text(route.name),
+                      ),
+                  ],
+                  onChanged: (id) => refresh(() {
+                    routine = _routines
+                        .where((route) => route.id == id)
+                        .firstOrNull;
+                  }),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: day,
+                      firstDate: DateTime(2000),
+                      lastDate: today,
+                    );
+                    if (picked != null && context.mounted) {
+                      refresh(() => day = picked);
+                    }
+                  },
+                  child: Text(_date(day)),
+                ),
+              ] else
+                Text('${existing.name} · ${_date(day)}'),
+              TextFormField(
+                initialValue: departureText,
+                decoration: const InputDecoration(labelText: '출발 시각 (HH:mm)'),
+                keyboardType: TextInputType.datetime,
+                onChanged: (value) => departureText = value,
+              ),
+              TextFormField(
+                initialValue: arrivalText,
+                decoration: InputDecoration(
+                  labelText: '도착 시각 (HH:mm)',
+                  helperText:
+                      existing?.arrival != null &&
+                          !DateUtils.isSameDay(day, existing!.arrival)
+                      ? _date(existing.arrival!)
+                      : null,
+                ),
+                keyboardType: TextInputType.datetime,
+                onChanged: (value) => arrivalText = value,
+              ),
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final departure = parse(departureText, day);
+                final arrival = parse(arrivalText, existing?.arrival ?? day);
+                final route = routine;
+                if (departure == null ||
+                    arrival == null ||
+                    (existing == null && route == null)) {
+                  refresh(() => error = '루틴과 출발·도착 시각을 확인해 주세요.');
+                  return;
+                }
+                if (!arrival.isAfter(departure)) {
+                  refresh(() => error = '도착 시각은 출발 시각보다 늦어야 해요.');
+                  return;
+                }
+                if (arrival.isAfter(_now)) {
+                  refresh(() => error = '아직 지나지 않은 시각은 기록할 수 없어요.');
+                  return;
+                }
+                final wake = existing?.wake;
+                if (wake != null && departure.isBefore(wake)) {
+                  refresh(() => error = '출발 시각은 기상 시각보다 앞설 수 없어요.');
+                  return;
+                }
+                final id = existing?.routineId ?? route!.id;
+                if (_visibleTrips.any(
+                  (trip) =>
+                      trip != existing &&
+                      trip.routineId == id &&
+                      DateUtils.isSameDay(trip.departure, day),
+                )) {
+                  refresh(() => error = '이 날짜의 루틴 기록이 이미 있어요. 기존 기록을 수정해 주세요.');
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _Trip(
+                    id,
+                    existing?.origin ?? route!.origin,
+                    existing?.destination ?? route!.destination,
+                    existing?.name ?? route!.name,
+                    departure,
+                    arrival,
+                    wake: wake,
+                    excluded: existing?.excluded ?? false,
+                  ),
+                );
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || result == null || _tripSaving || isMock != _mockActive) {
+      return;
+    }
+    final trips = [..._visibleTrips];
+    if (existing == null) {
+      if (trips.any(
+        (trip) =>
+            trip.routineId == result.routineId &&
+            DateUtils.isSameDay(trip.departure, result.departure),
+      )) {
+        return;
+      }
+      trips.add(result);
+    } else {
+      final index = trips.indexOf(existing);
+      if (index < 0) return;
+      trips[index] = result;
+    }
+    trips.sort((a, b) => a.departure.compareTo(b.departure));
+    setState(() => _tripSaving = true);
+    try {
+      await _saveTrips(trips, isMock: isMock);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('이동 기록을 저장하지 못했어요.')));
+      }
+    } finally {
+      if (mounted) setState(() => _tripSaving = false);
+    }
+  }
+
   Widget _records() {
     final records = _mockActive ? _mockRecords() : <_MockRecord>[];
     final months = records
@@ -1364,23 +1552,48 @@ class _MorningConceptScreenState extends State<MorningConceptScreen>
             style: const TextStyle(color: _Colors.muted),
           ),
         const SizedBox(height: 14),
+        if (_routines.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: _tripSaving ? null : () => _editTrip(),
+            icon: const Icon(Icons.add),
+            label: const Text('이동 기록 추가'),
+          ),
+        const SizedBox(height: 12),
         for (final trip in _visibleTrips.reversed.where(
-          (trip) => trip.arrival != null,
+          (trip) =>
+              !_mockActive ||
+              _recordMonth == null ||
+              '${trip.departure.year}.${trip.departure.month.toString().padLeft(2, '0')}' ==
+                  _recordMonth,
         ))
           _card(trip.name, [
             Text(_date(trip.departure)),
-            Text('출발 ${_time(trip.departure)} · 도착 ${_time(trip.arrival!)}'),
+            Text(
+              '출발 ${_time(trip.departure)} · ${trip.arrival == null ? '도착 미기록' : '도착 ${_time(trip.arrival!)}'}',
+            ),
             if (trip.wake case final wake?) ...[
               Text('기상 ${_time(wake)}'),
               Text('준비 ${_duration(trip.departure.difference(wake))}'),
             ],
-            Text('이동 ${_duration(trip.arrival!.difference(trip.departure))}'),
-            TextButton(
-              onPressed: _tripSaving ? null : () => _toggleTripExclusion(trip),
-              child: Text(trip.excluded ? '추천에 다시 포함' : '추천에서 제외'),
+            if (trip.arrival case final arrival?)
+              Text('이동 ${_duration(arrival.difference(trip.departure))}'),
+            Wrap(
+              children: [
+                TextButton(
+                  onPressed: _tripSaving ? null : () => _editTrip(trip),
+                  child: const Text('시각 수정'),
+                ),
+                if (trip.arrival != null)
+                  TextButton(
+                    onPressed: _tripSaving
+                        ? null
+                        : () => _toggleTripExclusion(trip),
+                    child: Text(trip.excluded ? '추천에 다시 포함' : '추천에서 제외'),
+                  ),
+              ],
             ),
           ]),
-        if (!_mockActive && _trips.every((trip) => trip.arrival == null))
+        if (!_mockActive && _trips.isEmpty)
           _card('아직 기록이 없어요', const [Text('홈에서 출발과 도착을 기록할 수 있어요.')]),
         if (_mockActive && records.isEmpty)
           _card('예시 기록이 없어요', const [Text('예시 루틴의 적용 요일을 확인해 주세요.')])

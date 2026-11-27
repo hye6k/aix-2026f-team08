@@ -399,6 +399,24 @@ void main() {
     expect(find.text('07:45 기상 권장 · 평소 준비 40분'), findsOneWidget);
     await tester.tap(find.text('기록'));
     await tester.pumpAndSettle();
+    Future<void> editArrival(String time) async {
+      await tester.tap(find.text('시각 수정').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, '도착 시각 (HH:mm)'),
+        time,
+      );
+      await tester.tap(find.text('저장'));
+      await tester.pumpAndSettle();
+    }
+
+    await editArrival('08:32');
+    await tester.tap(find.text('홈'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('08:28까지 출발 권장'), findsOneWidget);
+    await tester.tap(find.text('기록'));
+    await tester.pumpAndSettle();
+    await editArrival('09:30');
     await tester.tap(find.text('추천에서 제외').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('홈'));
@@ -406,6 +424,8 @@ void main() {
     expect(find.textContaining('까지 출발 권장'), findsNothing);
     await tester.tap(find.text('기록'));
     await tester.pumpAndSettle();
+    await editArrival('09:20');
+    expect(find.text('추천에 다시 포함'), findsOneWidget);
     await tester.tap(find.text('추천에 다시 포함'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('홈'));
@@ -417,6 +437,58 @@ void main() {
     await tester.tap(find.text('출발했어요'));
     await tester.pumpAndSettle();
     expect(find.textContaining('이동 중'), findsOneWidget);
+  });
+
+  testWidgets('누락 이동 기록은 순서를 검증하고 앱 재실행 후에도 남는다', (tester) async {
+    final today = DateTime(2026, 11, 9, 10);
+    SharedPreferences.setMockInitialValues({
+      'ux_location_draft_v1': jsonEncode({
+        'nextId': 3,
+        'places': [
+          {'id': 0, 'name': '집', 'location': '주소'},
+          {'id': 1, 'name': '학교', 'location': '주소'},
+        ],
+        'routines': [
+          {
+            'id': 2,
+            'name': '등교',
+            'origin': 0,
+            'destination': 1,
+            'hour': 9,
+            'minute': 0,
+            'days': [1],
+          },
+        ],
+      }),
+    });
+    Future<void> openRecords() async {
+      await tester.pumpWidget(
+        MaterialApp(home: MorningConceptScreen(now: today)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('기록'));
+      await tester.pumpAndSettle();
+    }
+
+    await openRecords();
+    await tester.tap(find.text('이동 기록 추가'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '출발 시각 (HH:mm)'),
+      '08:20',
+    );
+    final arrival = find.widgetWithText(TextFormField, '도착 시각 (HH:mm)');
+    await tester.enterText(arrival, '08:19');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(find.text('도착 시각은 출발 시각보다 늦어야 해요.'), findsOneWidget);
+    await tester.enterText(arrival, '08:55');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(find.text('이동 35분'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await openRecords();
+    expect(find.text('출발 08:20 · 도착 08:55'), findsOneWidget);
   });
 
   for (final scenario in [
